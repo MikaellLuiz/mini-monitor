@@ -37,6 +37,13 @@ tap 23 21
 wait 700
 mem volta_cat_tela
 shot m07_volta_cat_tela.png
+tap 160 205
+wait 600
+mem fluidez
+shot m07b_fluidez.png
+tap 23 21
+wait 700
+mem volta_cat_tela_fluidez
 tap 160 67
 wait 600
 mem relogio

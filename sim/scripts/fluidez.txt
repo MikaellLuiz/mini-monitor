@@ -1,0 +1,81 @@
+# Configuracoes > Tela > Fluidez e transicao: abre, escolhe Esmaecer e Sem animacao (vale na hora),
+# troca de pagina depois de cada uma e volta para a categoria. O simulador so grava o valor do buffer.
+# Termina devolvendo os padroes (8 linhas, Deslizar).
+wait 300
+usage claude direct
+usage codex direct
+usage agy none
+spotify playing
+pc online
+wait 1500
+swipe 160 100 160 140 60
+wait 1200
+tap 160 162
+wait 600
+tap 160 136
+wait 600
+shot f01_cat_tela.png
+tap 160 205
+wait 600
+shot f02_fluidez.png
+tap 262 81
+wait 300
+shot f03_fluida16_aviso.png
+tap 58 81
+wait 300
+tap 142 163
+wait 300
+shot f04_esmaecer.png
+tap 23 21
+wait 700
+shot f05_volta_cat.png
+tap 23 21
+wait 700
+tap 23 21
+wait 700
+swipe 160 150 160 90 60
+wait 1000
+swipe 220 130 180 130 60
+wait 90
+shot f06_esmaecendo.png
+wait 1000
+shot f07_pagina_esmaecer.png
+swipe 160 100 160 140 60
+wait 1200
+tap 160 162
+wait 600
+tap 160 136
+wait 600
+tap 160 205
+wait 600
+tap 250 163
+wait 300
+shot f08_sem_animacao.png
+tap 23 21
+wait 700
+tap 23 21
+wait 700
+tap 23 21
+wait 700
+swipe 160 150 160 90 60
+wait 1000
+swipe 220 130 180 130 60
+wait 1000
+shot f09_pagina_sem_animacao.png
+swipe 180 130 220 130 60
+wait 1000
+shot f10_volta_pagina.png
+swipe 160 100 160 140 60
+wait 1200
+tap 160 162
+wait 600
+tap 160 136
+wait 600
+tap 160 205
+wait 600
+tap 52 163
+wait 300
+shot f11_deslizar_de_volta.png
+tap 23 21
+wait 700
+shot f12_cat_tela_subtitulo.png

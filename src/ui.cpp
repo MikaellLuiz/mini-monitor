@@ -17,8 +17,12 @@ static constexpr int SCR_W = 320;
 // varredura a 111 Hz, o rasgo (sem pino TE) ficou o menos perceptivel.
 static constexpr uint32_t SLIDE_MS = 220;
 
+static constexpr uint32_t FADE_MS = 180;
+
 static const char *NVS_HIDDEN = "pg_hide";  // bit por PageId: 1 = escondida
 static const char *NVS_IA_SEP = "ia_sep";   // 1 = uma pagina por IA
+static const char *NVS_BUF_LN = "buf_ln";   // linhas do buffer de desenho: 8, 12 ou 16
+static const char *NVS_TRANS = "trans";     // transicao entre paginas (TRANS_*)
 
 static const char *PAGE_NAMES[PG_COUNT] = {"Relogio", "Uso de IA", "Claude", "Codex", "Antigravity",
                                            "Spotify", "Atalhos",   "PC"};
@@ -37,6 +41,18 @@ static bool animating = false;
 const char *ui_page_name(PageId id) { return PAGE_NAMES[id]; }
 bool ui_ia_separate() { return settings_get_u8(NVS_IA_SEP, 0) != 0; }
 void ui_set_ia_separate(bool on) { settings_set_u8(NVS_IA_SEP, on ? 1 : 0); }
+
+int ui_buf_lines() {
+  int n = settings_get_u8(NVS_BUF_LN, 8);
+  return (n == 12 || n == 16) ? n : 8;
+}
+void ui_set_buf_lines(int n) { settings_set_u8(NVS_BUF_LN, (n == 12 || n == 16) ? n : 8); }
+
+int ui_transition() {
+  int t = settings_get_u8(NVS_TRANS, TRANS_SLIDE);
+  return t <= TRANS_NONE ? t : TRANS_SLIDE;
+}
+void ui_set_transition(int t) { settings_set_u8(NVS_TRANS, t); }
 
 bool ui_page_applies(PageId id) {
   bool sep = ui_ia_separate();
@@ -98,14 +114,32 @@ static void goToPage(int idx) {
     lv_async_call(syncPages, nullptr);
     return;
   }
+  int trans = ui_transition();
+  if (trans == TRANS_NONE) {  // troca imediata; o syncPages roda fora do evento do gesto
+    lv_obj_scroll_to_x(tileview, idx * SCR_W, LV_ANIM_OFF);
+    lv_async_call(syncPages, nullptr);
+    return;
+  }
   animating = true;
   lv_anim_t a;
   lv_anim_init(&a);
-  lv_anim_set_var(&a, tileview);
-  lv_anim_set_values(&a, lv_obj_get_scroll_x(tileview), idx * SCR_W);
-  lv_anim_set_time(&a, SLIDE_MS);
-  lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-  lv_anim_set_exec_cb(&a, [](void *o, int32_t v) { lv_obj_scroll_to_x((lv_obj_t *)o, v, LV_ANIM_OFF); });
+  if (trans == TRANS_FADE) {
+    // Esmaecer: troca sem deslizar e a tile de destino sobe de transparente a opaca.
+    lv_obj_t *t = tiles[idx];
+    lv_obj_scroll_to_x(tileview, idx * SCR_W, LV_ANIM_OFF);
+    lv_obj_set_style_opa(t, LV_OPA_TRANSP, 0);
+    lv_anim_set_var(&a, t);
+    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_time(&a, FADE_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_linear);
+    lv_anim_set_exec_cb(&a, [](void *o, int32_t v) { lv_obj_set_style_opa((lv_obj_t *)o, (lv_opa_t)v, 0); });
+  } else {
+    lv_anim_set_var(&a, tileview);
+    lv_anim_set_values(&a, lv_obj_get_scroll_x(tileview), idx * SCR_W);
+    lv_anim_set_time(&a, SLIDE_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&a, [](void *o, int32_t v) { lv_obj_scroll_to_x((lv_obj_t *)o, v, LV_ANIM_OFF); });
+  }
   lv_anim_set_ready_cb(&a, [](lv_anim_t *) {
     animating = false;
     lv_async_call(syncPages, nullptr);  // fora da animacao: monta as vizinhas novas e solta as distantes

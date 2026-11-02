@@ -134,6 +134,65 @@ void pages_ui_open() {
   rebuildPagesList();
 }
 
+// ---- fluidez e transicao -----------------------------------------------------
+// Linhas do buffer de desenho (vale ao reiniciar) e animacao da troca de pagina (vale na hora).
+
+static lv_obj_t *fluidScreen, *fluidWarn, *segBuf[3], *segTrans[3];
+static const int BUF_OPTS[3] = {8, 12, 16};
+
+static void refreshFluid() {
+  int bl = ui_buf_lines(), tr = ui_transition();
+  for (int i = 0; i < 3; i++) {
+    styleSeg(segBuf[i], BUF_OPTS[i] == bl);
+    styleSeg(segTrans[i], i == tr);
+  }
+  if (bl == 16) lv_obj_clear_flag(fluidWarn, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(fluidWarn, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void bufCb(lv_event_t *e) {
+  ui_set_buf_lines(BUF_OPTS[(intptr_t)lv_event_get_user_data(e)]);
+  refreshFluid();
+}
+
+static void transCb(lv_event_t *e) {
+  ui_set_transition((int)(intptr_t)lv_event_get_user_data(e));
+  refreshFluid();
+}
+
+static void fluidBackCb(lv_event_t *) {
+  lv_obj_del_async(fluidScreen);  // async: o botao clicado e filho dela
+  fluidScreen = nullptr;
+  settings_ui_child_closed();
+}
+
+static void fluid_ui_open() {
+  if (fluidScreen || !ui_mem_ok(7 * 1024)) return;  // custo medido ~4,3 KB (x1,6)
+  fluidScreen = ui_overlay();
+  ui_back_header(fluidScreen, "Fluidez e transicao", fluidBackCb);
+
+  lv_obj_t *l1 = ui_muted(fluidScreen, "Fluidez (buffer de desenho)");
+  lv_obj_set_pos(l1, 12, 48);
+  segBuf[0] = ui_tonal_btn(fluidScreen, 10, 66, 96, "Economia 8", bufCb, (void *)0, 30);
+  segBuf[1] = ui_tonal_btn(fluidScreen, 112, 66, 96, "Normal 12", bufCb, (void *)1, 30);
+  segBuf[2] = ui_tonal_btn(fluidScreen, 214, 66, 96, "Fluida 16", bufCb, (void *)2, 30);
+  fluidWarn = ui_muted(fluidScreen, "Usa mais memoria: o Codex pode falhar.");
+  lv_obj_set_style_text_color(fluidWarn, thc(th::AMBER), 0);
+  lv_obj_set_pos(fluidWarn, 12, 100);
+
+  lv_obj_t *l2 = ui_muted(fluidScreen, "Transicao entre paginas");
+  lv_obj_set_pos(l2, 12, 130);
+  segTrans[0] = ui_tonal_btn(fluidScreen, 10, 148, 84, "Deslizar", transCb, (void *)TRANS_SLIDE, 30);
+  segTrans[1] = ui_tonal_btn(fluidScreen, 100, 148, 84, "Esmaecer", transCb, (void *)TRANS_FADE, 30);
+  segTrans[2] = ui_tonal_btn(fluidScreen, 190, 148, 120, "Sem animacao", transCb, (void *)TRANS_NONE, 30);
+
+  lv_obj_t *note = ui_muted(fluidScreen, "Fluidez vale depois de reiniciar.");
+  lv_obj_set_pos(note, 12, 218);
+  ui_tonal_btn(fluidScreen, 206, 210, 104, LV_SYMBOL_POWER " Reiniciar", restartNowCb, nullptr, 28);
+
+  refreshFluid();
+}
+
 // ---- configuracoes -----------------------------------------------------------
 // Tres categorias (Contas, Tela, Sistema), cada uma numa tela curta. Uma lista unica com as 12
 // linhas custava ~15 KB do pool do LVGL de uma vez, e o pool e pequeno (ver lv_conf.h):
@@ -141,7 +200,7 @@ void pages_ui_open() {
 
 enum Row : int {
   R_CLAUDE, R_CODEX, R_AGY, R_SPOTIFY, R_PC,
-  R_CLOCK, R_PAGES, R_THEME,
+  R_CLOCK, R_PAGES, R_THEME, R_FLUID,
   R_DIAG, R_TOUCH, R_RESTART, R_RESET,
   R_CAT_ACCOUNTS, R_CAT_SCREEN, R_CAT_SYSTEM,
   R_COUNT
@@ -188,7 +247,7 @@ static void refreshSubs(lv_timer_t *) {
 
   snprintf(buf, sizeof(buf), "%d de 5 conectadas", connected);
   setSub(R_CAT_ACCOUNTS, buf, connected == 5 ? th::GREEN : th::MUTED);
-  setSub(R_CAT_SCREEN, "Relogio, paginas e tema", th::MUTED);
+  setSub(R_CAT_SCREEN, "Relogio, paginas, tema e fluidez", th::MUTED);
   setSub(R_CAT_SYSTEM, "Diagnostico, toque e reiniciar", th::MUTED);
 
   clock_ui_summary(buf, sizeof(buf));
@@ -199,6 +258,9 @@ static void refreshSubs(lv_timer_t *) {
   snprintf(buf, sizeof(buf), "%d visiveis - IA %s", n, ui_ia_separate() ? "separada" : "junta");
   setSub(R_PAGES, buf, th::MUTED);
   setSub(R_THEME, theme_is_light() ? "Claro" : "Escuro", th::MUTED);
+  static const char *const TRANS_NAMES[3] = {"Deslizar", "Esmaecer", "Sem animacao"};
+  snprintf(buf, sizeof(buf), "%d linhas - %s", ui_buf_lines(), TRANS_NAMES[ui_transition()]);
+  setSub(R_FLUID, buf, th::MUTED);
   board_heap_t h = board_heap();
   snprintf(buf, sizeof(buf), "Heap %u KB", (unsigned)(h.free_bytes / 1024));
   setSub(R_DIAG, buf, th::MUTED);
@@ -245,6 +307,7 @@ static void openLeaf(Row r) {
     case R_PC: pc_ui_open_agent(); break;
     case R_CLOCK: clock_ui_open_settings(); break;
     case R_PAGES: pages_ui_open(); break;
+    case R_FLUID: fluid_ui_open(); break;
     case R_DIAG: diag_ui_open(); break;
     default: break;
   }
@@ -292,6 +355,7 @@ static void rowCb(lv_event_t *e) {
     case R_PC:
     case R_CLOCK:
     case R_PAGES:
+    case R_FLUID:
     case R_DIAG: lv_async_call(toLeafAsync, lv_event_get_user_data(e)); break;
     case R_THEME: themeToggle(); break;
     case R_TOUCH: board_request_touch_recalibration(); break;
@@ -357,6 +421,7 @@ static void openCategory(Row cat) {
     addRow(list, R_CLOCK, LV_SYMBOL_BELL, "Relogio");
     addRow(list, R_PAGES, LV_SYMBOL_LIST, "Paginas");
     addRow(list, R_THEME, LV_SYMBOL_IMAGE, "Tema");
+    addRow(list, R_FLUID, LV_SYMBOL_REFRESH, "Fluidez e transicao");
   } else {
     addRow(list, R_DIAG, LV_SYMBOL_LOOP, "Diagnostico de rede");
     addRow(list, R_TOUCH, LV_SYMBOL_GPS, "Recalibrar toque", false, true);

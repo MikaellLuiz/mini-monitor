@@ -27,6 +27,7 @@ static constexpr int ROTATION = 1;  // paisagem; 3 = girada 180 graus (recalibra
 // Para voltar a fluidez de antes, suba para 24 (ou 16/20 como meio-termo).
 // Com 8 linhas (2 x 5 KB) sobram ~5 KB a mais para a TLS; custo: mais flushes por redesenho (12 -> 8 =
 // 1,5x blocos). Se a fluidez piorar, basta voltar a constante para 12.
+// Esse e o padrao; a tela Fluidez (Configuracoes > Tela) permite 12 ou 16, lido no boot.
 static constexpr int BUF_LINES = 8;
 // Toque resistivo com pouca forca falha por alguns ms no meio do arrasto; segurar
 // o "pressionado" nesse intervalo evita que o LVGL entenda como soltou.
@@ -112,10 +113,22 @@ void setup() {
   heap_mark("tft.init + touch");
 
   lv_init();
-  size_t bufBytes = SCR_W * BUF_LINES * sizeof(lv_color_t);
+  // Linhas do buffer: escolha da tela Fluidez (NVS "buf_ln"; 8, 12 ou 16, o resto vira 8).
+  int bufLines = ui_buf_lines();
+  size_t bufBytes = SCR_W * bufLines * sizeof(lv_color_t);
   auto *buf1 = (lv_color_t *)heap_caps_malloc(bufBytes, MALLOC_CAP_DMA);
   auto *buf2 = (lv_color_t *)heap_caps_malloc(bufBytes, MALLOC_CAP_DMA);
-  lv_disp_draw_buf_init(&dispBuf, buf1, buf2, SCR_W * BUF_LINES);
+  if ((!buf1 || !buf2) && bufLines != BUF_LINES) {  // sem memoria DMA para 12/16: volta ao padrao
+    if (buf1) heap_caps_free(buf1);
+    if (buf2) heap_caps_free(buf2);
+    board_log("[ui] alocacao de %d linhas falhou, usando %d", bufLines, BUF_LINES);
+    bufLines = BUF_LINES;
+    bufBytes = SCR_W * bufLines * sizeof(lv_color_t);
+    buf1 = (lv_color_t *)heap_caps_malloc(bufBytes, MALLOC_CAP_DMA);
+    buf2 = (lv_color_t *)heap_caps_malloc(bufBytes, MALLOC_CAP_DMA);
+  }
+  board_log("[ui] buffer de desenho: %d linhas", bufLines);
+  lv_disp_draw_buf_init(&dispBuf, buf1, buf2, SCR_W * bufLines);
 
   lv_disp_drv_init(&dispDrv);
   dispDrv.hor_res = SCR_W;

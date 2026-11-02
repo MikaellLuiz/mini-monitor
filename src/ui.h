@@ -37,3 +37,11 @@ void ui_set_ia_separate(bool on);
 bool ui_page_applies(PageId id);  // a pagina existe no modo de IA escolhido
 bool ui_page_enabled(PageId id);
 void ui_set_page_enabled(PageId id, bool on);
+
+// Fluidez: linhas do buffer de desenho (8, 12 ou 16; vale apos reiniciar; padrao 8).
+int ui_buf_lines();
+void ui_set_buf_lines(int n);
+// Transicao entre paginas (vale na hora; padrao Deslizar).
+enum { TRANS_SLIDE = 0, TRANS_FADE = 1, TRANS_NONE = 2 };
+int ui_transition();
+void ui_set_transition(int t);
