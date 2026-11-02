@@ -1,0 +1,84 @@
+# Como nav.txt, com IA separada: --set ia_sep=1
+wait 300
+usage claude direct
+usage codex high
+usage agy none
+spotify playing
+pc online
+wait 1500
+shot w00_relogio.png
+swipe 220 130 180 130 60
+wait 1000
+shot w01_ida_claude.png
+swipe 220 130 180 130 60
+wait 1000
+shot w02_ida_codex.png
+swipe 220 130 180 130 60
+wait 1000
+shot w03_ida_agy.png
+swipe 220 130 180 130 60
+wait 1000
+shot w04_ida_spotify.png
+swipe 220 130 180 130 60
+wait 1000
+shot w05_ida_atalhos.png
+swipe 220 130 180 130 60
+wait 1000
+shot w06_ida_pc.png
+swipe 180 130 220 130 60
+wait 1000
+shot w05_volta_atalhos.png
+swipe 180 130 220 130 60
+wait 1000
+shot w04_volta_spotify.png
+swipe 180 130 220 130 60
+wait 1000
+shot w03_volta_agy.png
+swipe 180 130 220 130 60
+wait 1000
+shot w02_volta_codex.png
+swipe 180 130 220 130 60
+wait 1000
+shot w01_volta_claude.png
+swipe 180 130 220 130 60
+wait 1000
+shot w00_volta_relogio.png
+swipe 220 130 180 130 60
+wait 1000
+shot w11_ida_claude.png
+swipe 220 130 180 130 60
+wait 1000
+shot w12_ida_codex.png
+swipe 220 130 180 130 60
+wait 1000
+shot w13_ida_agy.png
+swipe 220 130 180 130 60
+wait 1000
+shot w14_ida_spotify.png
+swipe 220 130 180 130 60
+wait 1000
+shot w15_ida_atalhos.png
+swipe 220 130 180 130 60
+wait 1000
+shot w16_ida_pc.png
+swipe 180 130 220 130 60
+wait 1000
+shot w15_volta_atalhos.png
+swipe 180 130 220 130 60
+wait 1000
+shot w14_volta_spotify.png
+swipe 180 130 220 130 60
+wait 1000
+shot w13_volta_agy.png
+swipe 180 130 220 130 60
+wait 1000
+shot w12_volta_codex.png
+swipe 180 130 220 130 60
+wait 1000
+shot w11_volta_claude.png
+swipe 180 130 220 130 60
+wait 1000
+shot w10_volta_relogio.png
+tap 230 183
+wait 1000
+shot w90_salto_spotify.png

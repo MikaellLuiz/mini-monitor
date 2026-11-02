@@ -1,0 +1,27 @@
+# Engrenagem com IA separada: rodar com --set ia_sep=1. Claude -> Contas; abre Claude dentro e volta.
+wait 300
+usage claude direct
+usage codex high
+usage agy none
+wait 1500
+swipe 220 130 180 130 60
+wait 1200
+shot s01_claude.png
+tap 298 222
+wait 700
+shot s02_contas.png
+tap 160 70
+wait 700
+shot s03_conta_claude.png
+tap 23 21
+wait 700
+shot s04_volta_contas.png
+tap 23 21
+wait 700
+shot s05_volta_pagina.png
+swipe 220 130 180 130 60
+wait 1200
+shot s06_codex.png
+swipe 220 130 180 130 60
+wait 1200
+shot s07_antigravity.png

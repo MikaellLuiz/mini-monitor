@@ -1,0 +1,7 @@
+# Uma captura do Relogio; rodar com --set clk_style=N (0 digital, 1 analogico, 2 minimo, 3 anel)
+# e --set theme=1 para o tema claro.
+wait 300
+usage claude direct
+spotify playing
+wait 1500
+shot relogio.png

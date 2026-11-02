@@ -1,0 +1,67 @@
+# Percorre TODAS as paginas ida e volta duas vezes (paginas sob demanda: cada uma remonta ao voltar).
+# Depois salta do Relogio direto ao Spotify pelo atalho (salto longo). Rodar tambem com --set ia_sep=1
+# (a ordem muda: use nav_sep.txt).
+wait 300
+usage claude direct
+usage codex direct
+usage agy none
+spotify playing
+pc online
+wait 1500
+shot v00_relogio.png
+swipe 220 130 180 130 60
+wait 1000
+shot v01_ida_uso.png
+swipe 220 130 180 130 60
+wait 1000
+shot v02_ida_spotify.png
+swipe 220 130 180 130 60
+wait 1000
+shot v03_ida_atalhos.png
+swipe 220 130 180 130 60
+wait 1000
+shot v04_ida_pc.png
+swipe 180 130 220 130 60
+wait 1000
+shot v03_volta_atalhos.png
+swipe 180 130 220 130 60
+wait 1000
+shot v02_volta_spotify.png
+swipe 180 130 220 130 60
+wait 1000
+shot v01_volta_uso.png
+swipe 180 130 220 130 60
+wait 1000
+shot v00_volta_relogio.png
+swipe 220 130 180 130 60
+wait 1000
+shot v11_ida_uso.png
+swipe 220 130 180 130 60
+wait 1000
+shot v12_ida_spotify.png
+swipe 220 130 180 130 60
+wait 1000
+shot v13_ida_atalhos.png
+swipe 220 130 180 130 60
+wait 1000
+shot v14_ida_pc.png
+swipe 180 130 220 130 60
+wait 1000
+shot v13_volta_atalhos.png
+swipe 180 130 220 130 60
+wait 1000
+shot v12_volta_spotify.png
+swipe 180 130 220 130 60
+wait 1000
+shot v11_volta_uso.png
+swipe 180 130 220 130 60
+wait 1000
+shot v10_volta_relogio.png
+tap 230 183
+wait 1000
+shot v90_salto_spotify.png
+swipe 180 130 220 130 60
+wait 1000
+swipe 180 130 220 130 60
+wait 1000
+shot v91_volta_relogio.png

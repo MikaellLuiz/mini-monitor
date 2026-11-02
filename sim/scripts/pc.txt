@@ -1,0 +1,25 @@
+# Paginas Atalhos e PC com o agente em cada estado, e o pareamento.
+wait 300
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 500
+shot p01_atalhos.png
+pc none
+shot p02_atalhos_sem_agente.png
+pc online
+swipe 220 130 180 130 60
+wait 500
+shot p03_pc_online.png
+pc high
+shot p04_pc_alto.png
+pc offline
+shot p05_pc_offline.png
+pc none
+shot p06_pc_sem_agente.png
+tap 287 20                 # engrenagem
+wait 300
+shot p07_pareamento.png
+tap 160 150                # Parear um PC
+wait 300
+shot p08_codigo.png

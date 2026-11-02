@@ -1,0 +1,42 @@
+# Custo de cada tela do Configuracoes (mem antes e depois de abrir), para calibrar o ui_mem_ok.
+# Rodar em 32 bits: build_sim.py --m32 --script sim/scripts/mem_telas.txt [--set ia_sep=1]
+wait 300
+swipe 160 100 160 140 60
+wait 1200
+tap 160 162
+wait 600
+mem lista
+tap 160 80
+wait 600
+mem cat_contas
+tap 160 70
+wait 700
+mem conta_claude
+tap 23 21
+wait 700
+tap 160 205
+wait 700
+mem conta_spotify
+shot t01_conta_spotify.png
+tap 23 21
+wait 700
+swipe 160 200 160 90 120
+wait 400
+tap 160 215
+wait 700
+mem agente_pc
+shot t02_agente_pc.png
+tap 23 21
+wait 700
+tap 23 21
+wait 700
+tap 160 192
+wait 700
+mem cat_sistema
+tap 160 67
+wait 700
+mem diagnostico
+shot t03_diagnostico.png
+tap 23 21
+wait 700
+mem volta_cat_sistema

@@ -1,0 +1,393 @@
+#include "settings_ui.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "board.h"
+#include "clock_ui.h"
+#include "diag_ui.h"
+#include "pc_ui.h"
+#include "pcagent.h"
+#include "spotify.h"
+#include "spotify_ui.h"
+#include "theme.h"
+#include "ui.h"
+#include "usage.h"
+#include "usage_ui.h"
+
+static constexpr int SCR_W = 320;
+static constexpr int SCR_H = 240;
+
+// ---- confirmacao -------------------------------------------------------------
+
+static lv_obj_t *dlg;
+static void (*dlgOk)();
+
+static void dlgCloseCb(lv_event_t *) {
+  lv_obj_del_async(dlg);  // async: o botao clicado e filho dele
+  dlg = nullptr;
+}
+
+static void dlgOkCb(lv_event_t *e) {
+  void (*fn)() = dlgOk;
+  dlgCloseCb(e);
+  if (fn) fn();
+}
+
+static void openDialog(const char *title, const char *text, const char *ok, void (*fn)()) {
+  if (dlg) return;
+  dlgOk = fn;
+  dlg = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(dlg);
+  lv_obj_set_size(dlg, SCR_W, SCR_H);
+  lv_obj_set_style_bg_color(dlg, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(dlg, LV_OPA_60, 0);
+  lv_obj_add_flag(dlg, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_clear_flag(dlg, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+  lv_obj_t *card = ui_card(dlg, 24, 50, 272, 140, th::SHEET);
+  lv_obj_set_style_radius(card, 16, 0);
+  lv_obj_t *t = lv_label_create(card);
+  lv_label_set_text(t, title);
+  lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+  lv_obj_set_pos(t, 18, 14);
+  lv_obj_t *m = ui_muted(card, text, &lv_font_montserrat_12);
+  lv_obj_set_width(m, 236);
+  lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+  lv_obj_set_pos(m, 18, 42);
+  ui_tonal_btn(card, 18, 94, 100, "Cancelar", dlgCloseCb);
+  lv_obj_t *okLbl = ui_tonal_btn(card, 128, 94, 126, ok, dlgOkCb);
+  ui_btn_danger(okLbl);
+}
+
+// ---- paginas -----------------------------------------------------------------
+// Escolhe o modo do uso de IA e quais paginas aparecem. Salva na hora; o tileview so e
+// montado no boot, entao vale ao reiniciar.
+
+static lv_obj_t *pagesScreen, *pagesList, *segJunta, *segSep;
+
+static void styleSeg(lv_obj_t *label, bool on) {
+  lv_obj_t *b = lv_obj_get_parent(label);
+  lv_obj_set_style_bg_color(b, thc(on ? th::TONAL : th::MINI), 0);
+  lv_obj_set_style_text_color(b, thc(on ? th::ON_TONAL : th::MUTED), 0);
+}
+
+static void pageSwitchCb(lv_event_t *e) {
+  PageId id = (PageId)(intptr_t)lv_event_get_user_data(e);
+  ui_set_page_enabled(id, lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+
+static void rebuildPagesList() {
+  bool sep = ui_ia_separate();
+  styleSeg(segJunta, !sep);
+  styleSeg(segSep, sep);
+  lv_obj_clean(pagesList);
+  for (int i = 0; i < PG_COUNT; i++) {
+    PageId id = (PageId)i;
+    if (!ui_page_applies(id)) continue;
+    UiRow r = ui_list_row(pagesList, nullptr, ui_page_name(id), nullptr, nullptr, nullptr, 34);
+    lv_obj_t *sw = lv_switch_create(r.row);
+    lv_obj_set_size(sw, 40, 22);
+    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -10, 0);
+    lv_obj_set_style_bg_color(sw, thc(th::TRACK), 0);
+    lv_obj_set_style_bg_color(sw, thc(th::FILL), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(sw, thc(th::ON_TONAL), LV_PART_KNOB | LV_STATE_CHECKED);
+    lv_obj_set_ext_click_area(sw, 8);
+    if (ui_page_enabled(id)) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, pageSwitchCb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)id);
+  }
+}
+
+static void modeCb(lv_event_t *e) {
+  ui_set_ia_separate(lv_event_get_user_data(e) != nullptr);
+  rebuildPagesList();
+}
+
+static void restartNowCb(lv_event_t *) { board_restart(); }
+
+static void pagesBackCb(lv_event_t *) {
+  lv_obj_del_async(pagesScreen);  // async: o botao clicado e filho dela
+  pagesScreen = nullptr;
+  settings_ui_child_closed();
+}
+
+void pages_ui_open() {
+  if (pagesScreen || !ui_mem_ok(13 * 1024)) return;  // custo medido ~8,5 KB (x1,5)
+  pagesScreen = ui_overlay();
+  ui_back_header(pagesScreen, "Paginas", pagesBackCb);
+
+  segJunta = ui_tonal_btn(pagesScreen, 10, 46, 146, "IA junta", modeCb, nullptr, 30);
+  segSep = ui_tonal_btn(pagesScreen, 164, 46, 146, "IA separada", modeCb, (void *)1, 30);
+
+  lv_obj_t *scroll = lv_obj_create(pagesScreen);
+  lv_obj_remove_style_all(scroll);
+  lv_obj_set_size(scroll, 300, 122);
+  lv_obj_set_pos(scroll, 10, 84);
+  lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
+  pagesList = ui_list(scroll, 0, 0, 300);
+
+  lv_obj_t *note = ui_muted(pagesScreen, "Vale depois de reiniciar.");
+  lv_obj_set_pos(note, 12, 218);
+  ui_tonal_btn(pagesScreen, 176, 210, 134, LV_SYMBOL_POWER " Reiniciar", restartNowCb, nullptr, 28);
+
+  rebuildPagesList();
+}
+
+// ---- configuracoes -----------------------------------------------------------
+// Tres categorias (Contas, Tela, Sistema), cada uma numa tela curta. Uma lista unica com as 12
+// linhas custava ~15 KB do pool do LVGL de uma vez, e o pool e pequeno (ver lv_conf.h):
+// com IA separada o painel chegava a reiniciar ao abrir as Configuracoes.
+
+enum Row : int {
+  R_CLAUDE, R_CODEX, R_AGY, R_SPOTIFY, R_PC,
+  R_CLOCK, R_PAGES, R_THEME,
+  R_DIAG, R_TOUCH, R_RESTART, R_RESET,
+  R_CAT_ACCOUNTS, R_CAT_SCREEN, R_CAT_SYSTEM,
+  R_COUNT
+};
+static constexpr int R_LEAF_COUNT = R_CAT_ACCOUNTS;  // linhas das telas de categoria
+
+static lv_obj_t *screen, *catScreen, *subs[R_COUNT];
+static lv_timer_t *timer;  // da tela montada no momento (lista principal ou categoria)
+// Nada fica empilhado: abrir uma categoria desmonta a lista, abrir uma tela filha desmonta a categoria
+// (o pool do LVGL e pequeno). curCat = categoria montada; retCat = para onde o voltar da filha leva.
+static int curCat = -1, retCat = -1;
+// true = categoria aberta de fora (engrenagem): o voltar dela fecha, sem montar a lista.
+static bool catDirect = false;
+
+// Categoria nao remontou (sem memoria): volta para a lista, ou so fecha se veio de fora.
+static void fallbackToList() {
+  curCat = -1;
+  if (catDirect) catDirect = false;
+  else settings_ui_open();
+}
+
+static void setSub(Row r, const char *text, uint32_t color) {
+  if (!subs[r]) return;
+  if (strcmp(lv_label_get_text(subs[r]), text)) lv_label_set_text(subs[r], text);
+  lv_obj_set_style_text_color(subs[r], thc(color), 0);
+}
+
+static void refreshSubs(lv_timer_t *) {
+  static const Provider PROV[3] = {PROV_CLAUDE, PROV_CODEX, PROV_ANTIGRAVITY};
+  char buf[48];
+  int connected = 0;
+  for (int i = 0; i < 3; i++) {
+    bool has = usage_has_account(PROV[i]);
+    connected += has;
+    setSub((Row)(R_CLAUDE + i), has ? "Conectado" : "Sem conta", has ? th::GREEN : th::ON_TONAL);
+  }
+  SpotifyState s = spotify_get();
+  connected += s.linked;
+  setSub(R_SPOTIFY, s.linked ? "Conectado" : "Sem conta", s.linked ? th::GREEN : th::ON_TONAL);
+  PcMetrics m = pc_get();
+  connected += m.paired;
+  if (!m.paired) setSub(R_PC, "Sem agente", th::ON_TONAL);
+  else setSub(R_PC, m.name, m.online ? th::GREEN : th::MUTED);
+
+  snprintf(buf, sizeof(buf), "%d de 5 conectadas", connected);
+  setSub(R_CAT_ACCOUNTS, buf, connected == 5 ? th::GREEN : th::MUTED);
+  setSub(R_CAT_SCREEN, "Relogio, paginas e tema", th::MUTED);
+  setSub(R_CAT_SYSTEM, "Diagnostico, toque e reiniciar", th::MUTED);
+
+  clock_ui_summary(buf, sizeof(buf));
+  setSub(R_CLOCK, buf, th::MUTED);
+  int n = 0;
+  for (int i = 0; i < PG_COUNT; i++)
+    if (ui_page_applies((PageId)i) && ui_page_enabled((PageId)i)) n++;
+  snprintf(buf, sizeof(buf), "%d visiveis - IA %s", n, ui_ia_separate() ? "separada" : "junta");
+  setSub(R_PAGES, buf, th::MUTED);
+  setSub(R_THEME, theme_is_light() ? "Claro" : "Escuro", th::MUTED);
+  board_heap_t h = board_heap();
+  snprintf(buf, sizeof(buf), "Heap %u KB", (unsigned)(h.free_bytes / 1024));
+  setSub(R_DIAG, buf, th::MUTED);
+}
+
+static void themeToggle() {
+  theme_set_light(!theme_is_light());
+  board_restart();  // as telas pegam as cores na montagem
+}
+
+static void openCategory(Row cat);
+
+static void unmountMain() {
+  if (timer) lv_timer_del(timer);
+  timer = nullptr;
+  if (screen) lv_obj_del(screen);
+  screen = nullptr;
+  for (int i = R_CAT_ACCOUNTS; i < R_COUNT; i++) subs[i] = nullptr;
+}
+
+static void unmountCat() {
+  if (timer) lv_timer_del(timer);
+  timer = nullptr;
+  if (catScreen) lv_obj_del(catScreen);
+  catScreen = nullptr;
+  for (int i = 0; i < R_LEAF_COUNT; i++) subs[i] = nullptr;
+}
+
+// As trocas rodam em lv_async_call (fora do evento do botao, que e filho da tela apagada), entao
+// apagam direto e a memoria ja esta livre quando a proxima tela e montada.
+static void toCategoryAsync(void *p) {
+  unmountMain();
+  curCat = (int)(intptr_t)p;
+  openCategory((Row)curCat);
+  if (!catScreen) fallbackToList();  // sem memoria: volta para a lista
+}
+
+static void openLeaf(Row r) {
+  switch (r) {
+    case R_CLAUDE: usage_ui_open_account(PROV_CLAUDE); break;
+    case R_CODEX: usage_ui_open_account(PROV_CODEX); break;
+    case R_AGY: usage_ui_open_account(PROV_ANTIGRAVITY); break;
+    case R_SPOTIFY: spotify_ui_open_account(); break;
+    case R_PC: pc_ui_open_agent(); break;
+    case R_CLOCK: clock_ui_open_settings(); break;
+    case R_PAGES: pages_ui_open(); break;
+    case R_DIAG: diag_ui_open(); break;
+    default: break;
+  }
+}
+
+static void toLeafAsync(void *p) {
+  int cat = curCat;
+  unmountCat();
+  uint32_t n = lv_obj_get_child_cnt(lv_layer_top());
+  retCat = cat;
+  openLeaf((Row)(intptr_t)p);
+  if (lv_obj_get_child_cnt(lv_layer_top()) <= n) {  // a tela nao abriu (sem memoria): refaz a categoria
+    retCat = -1;
+    openCategory((Row)cat);
+    if (!catScreen) fallbackToList();
+  }
+}
+
+// O voltar das telas filhas chama settings_ui_child_closed() logo apos pedir a propria exclusao
+// (lv_obj_del_async). O lv_async_call novo roda ANTES dessa exclusao no mesmo ciclo (timers novos
+// entram na frente), por isso dois saltos: no segundo a filha ja sumiu.
+static void backHop2(void *) {
+  int cat = retCat;
+  retCat = -1;
+  if (cat < 0) return;
+  curCat = cat;
+  openCategory((Row)cat);
+  if (!catScreen) fallbackToList();
+}
+static void backHop1(void *) { lv_async_call(backHop2, nullptr); }
+
+void settings_ui_child_closed() {
+  if (retCat >= 0) lv_async_call(backHop1, nullptr);
+}
+
+static void rowCb(lv_event_t *e) {
+  switch ((Row)(intptr_t)lv_event_get_user_data(e)) {
+    case R_CAT_ACCOUNTS:
+    case R_CAT_SCREEN:
+    case R_CAT_SYSTEM: lv_async_call(toCategoryAsync, lv_event_get_user_data(e)); break;
+    case R_CLAUDE:
+    case R_CODEX:
+    case R_AGY:
+    case R_SPOTIFY:
+    case R_PC:
+    case R_CLOCK:
+    case R_PAGES:
+    case R_DIAG: lv_async_call(toLeafAsync, lv_event_get_user_data(e)); break;
+    case R_THEME: themeToggle(); break;
+    case R_TOUCH: board_request_touch_recalibration(); break;
+    case R_RESTART:
+      openDialog("Reiniciar o painel?", "A tela apaga por alguns segundos. Contas e Wi-Fi continuam salvos.", "Reiniciar",
+                 board_restart);
+      break;
+    case R_RESET:
+      openDialog("Redefinir tudo?", "Apaga PIN, Wi-Fi, contas e PCs guardados. Nao tem volta.", "Apagar tudo",
+                 board_factory_reset);
+      break;
+    default: break;
+  }
+}
+
+static void closeCb(lv_event_t *) {
+  lv_timer_del(timer);
+  timer = nullptr;
+  lv_obj_del_async(screen);  // async: o botao clicado e filho dela
+  screen = nullptr;
+  memset(subs, 0, sizeof(subs));
+}
+
+static void catBackAsync(void *) {
+  unmountCat();
+  curCat = -1;
+  if (catDirect) catDirect = false;  // veio de fora: so fecha
+  else settings_ui_open();           // remonta a lista
+}
+static void catBackCb(lv_event_t *) { lv_async_call(catBackAsync, nullptr); }
+
+// Linha da lista; `plain` = sem subtitulo (acoes), com o titulo centralizado.
+static void addRow(lv_obj_t *list, Row id, const char *icon, const char *title, bool danger = false, bool plain = false,
+                   int h = 0) {
+  UiRow r = ui_list_row(list, icon, title, plain ? nullptr : "", rowCb, (void *)(intptr_t)id, h ? h : (plain ? 44 : 46));
+  subs[id] = r.sub;
+  if (danger) lv_obj_set_style_text_color(r.title, thc(th::ON_DANGER), 0);
+}
+
+static void openCategory(Row cat) {
+  if (catScreen || !ui_mem_ok(9 * 1024)) return;  // Contas, a maior: ~6 KB medidos (x1,5)
+  const char *name = cat == R_CAT_ACCOUNTS ? "Contas" : cat == R_CAT_SCREEN ? "Tela" : "Sistema";
+  catScreen = ui_overlay();
+  ui_back_header(catScreen, name, catBackCb);
+
+  lv_obj_t *scroll = lv_obj_create(catScreen);
+  lv_obj_remove_style_all(scroll);
+  lv_obj_set_size(scroll, SCR_W, SCR_H - 44);
+  lv_obj_set_pos(scroll, 0, 44);
+  lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_style_pad_hor(scroll, 10, 0);
+  lv_obj_set_style_pad_bottom(scroll, 12, 0);
+  lv_obj_t *list = ui_list(scroll, 0, 0, 300);
+
+  if (cat == R_CAT_ACCOUNTS) {
+    addRow(list, R_CLAUDE, LV_SYMBOL_DIRECTORY, "Claude");
+    addRow(list, R_CODEX, LV_SYMBOL_DIRECTORY, "Codex");
+    addRow(list, R_AGY, LV_SYMBOL_DIRECTORY, "Antigravity");
+    addRow(list, R_SPOTIFY, LV_SYMBOL_AUDIO, "Spotify");
+    addRow(list, R_PC, LV_SYMBOL_USB, "Agente do PC");
+  } else if (cat == R_CAT_SCREEN) {
+    addRow(list, R_CLOCK, LV_SYMBOL_BELL, "Relogio");
+    addRow(list, R_PAGES, LV_SYMBOL_LIST, "Paginas");
+    addRow(list, R_THEME, LV_SYMBOL_IMAGE, "Tema");
+  } else {
+    addRow(list, R_DIAG, LV_SYMBOL_LOOP, "Diagnostico de rede");
+    addRow(list, R_TOUCH, LV_SYMBOL_GPS, "Recalibrar toque", false, true);
+    addRow(list, R_RESTART, LV_SYMBOL_POWER, "Reiniciar o painel", true, true);
+    addRow(list, R_RESET, LV_SYMBOL_TRASH, "Redefinir tudo", true, true);
+  }
+  timer = lv_timer_create(refreshSubs, 1000, nullptr);
+  refreshSubs(nullptr);
+}
+
+void settings_ui_open_category(SettingsCat cat) {
+  if (screen || catScreen || retCat >= 0) return;  // ja ha Configuracoes (ou filha dela) aberta
+  catDirect = true;
+  curCat = R_CAT_ACCOUNTS + (int)cat;
+  openCategory((Row)curCat);
+  if (!catScreen) {  // sem memoria: nao abre
+    curCat = -1;
+    catDirect = false;
+  }
+}
+
+void settings_ui_open() {
+  if (screen || !ui_mem_ok(6 * 1024)) return;  // lista: ~3,9 KB medidos (x1,5)
+  screen = ui_overlay();
+  ui_back_header(screen, "Configuracoes", closeCb);
+
+  lv_obj_t *list = ui_list(screen, 10, 52, 300);
+  addRow(list, R_CAT_ACCOUNTS, LV_SYMBOL_DIRECTORY, "Contas", false, false, 56);
+  addRow(list, R_CAT_SCREEN, LV_SYMBOL_IMAGE, "Tela", false, false, 56);
+  addRow(list, R_CAT_SYSTEM, LV_SYMBOL_SETTINGS, "Sistema", false, false, 56);
+
+  timer = lv_timer_create(refreshSubs, 1000, nullptr);
+  refreshSubs(nullptr);
+}

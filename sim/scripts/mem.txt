@@ -1,0 +1,50 @@
+# Mede o uso do pool do LVGL em cada tela, navegando Configuracoes -> categoria -> tela -> voltar.
+# Rodar em 32 bits (o pico a conferir e o maior "usado" contra o pool da placa):
+#   build_sim.py --m32 --script sim/scripts/mem.txt [--set ia_sep=1] [--set clk_style=1]
+wait 300
+mem boot
+swipe 160 100 160 140 60
+wait 1200
+mem painel_rapido
+tap 160 162
+wait 600
+mem configuracoes
+shot m01_configuracoes.png
+tap 160 80
+wait 600
+mem cat_contas
+shot m02_cat_contas.png
+tap 160 70
+wait 600
+mem conta_claude
+shot m03_conta_claude.png
+tap 23 21
+wait 700
+mem volta_cat_contas
+shot m04_volta_cat_contas.png
+tap 23 21
+wait 700
+mem volta_configuracoes
+tap 160 136
+wait 600
+mem cat_tela
+shot m05_cat_tela.png
+tap 160 113
+wait 600
+mem paginas
+shot m06_paginas.png
+tap 23 21
+wait 700
+mem volta_cat_tela
+shot m07_volta_cat_tela.png
+tap 160 67
+wait 600
+mem relogio
+shot m08_relogio.png
+tap 23 21
+wait 700
+mem volta_cat_tela2
+tap 23 21
+wait 700
+mem volta_configuracoes2
+shot m09_volta_configuracoes.png

@@ -1,0 +1,40 @@
+# Engrenagem de cada pagina (IA junta): Relogio, Uso de IA, Spotify; Atalhos e PC sem engrenagem.
+# Voltar (seta em 23,21) fecha e devolve a pagina.
+wait 300
+usage claude direct
+usage codex direct
+usage agy none
+spotify playing
+pc online
+wait 1500
+shot g01_relogio.png
+tap 298 222
+wait 700
+shot g02_relogio_opcoes.png
+tap 23 21
+wait 700
+shot g03_relogio_volta.png
+swipe 220 130 180 130 60
+wait 1200
+shot g04_uso.png
+tap 298 222
+wait 700
+shot g05_uso_contas.png
+tap 23 21
+wait 700
+shot g06_uso_volta.png
+swipe 220 130 180 130 60
+wait 1200
+shot g07_spotify.png
+tap 298 222
+wait 700
+shot g08_spotify_conta.png
+tap 23 21
+wait 700
+shot g09_spotify_volta.png
+swipe 220 130 180 130 60
+wait 1200
+shot g10_atalhos.png
+swipe 220 130 180 130 60
+wait 1200
+shot g11_pc.png

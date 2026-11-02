@@ -1,0 +1,10 @@
+# Painel de ajustes -> Diagnostico de rede.
+wait 300
+swipe 160 100 160 140 60   # abre o painel
+wait 400
+shot d01_painel.png
+tap 160 110                # Diagnostico de rede
+wait 1000
+shot d02_rodando.png
+wait 4000
+shot d03_fim.png

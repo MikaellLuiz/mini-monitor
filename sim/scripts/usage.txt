@@ -1,0 +1,28 @@
+# Cartoes dos tres provedores e as telas de conta.
+wait 300
+shot u01_direto.png
+usage claude high
+usage agy cache
+shot u02_alto_e_cache.png
+usage codex failed
+usage claude closed
+shot u03_falha_e_janela_fechada.png
+usage codex none
+usage claude direct
+usage agy direct
+shot u04_sem_conta_codex.png
+tap 160 120                # cartao do Codex -> tela da conta
+wait 300
+shot u05_conta_codex_sem.png
+tap 160 210                # Entrar com codigo
+wait 300
+shot u06_login_codex.png
+tap 265 21                 # Voltar
+wait 300
+usage codex direct
+tap 160 178                # cartao do Antigravity
+wait 300
+shot u07_conta_agy.png
+tap 160 210                # Configurar pelo navegador
+wait 300
+shot u08_portal_agy.png

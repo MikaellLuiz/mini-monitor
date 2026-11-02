@@ -1,0 +1,22 @@
+# Pagina do Spotify em cada estado e a tela da conta.
+wait 300
+swipe 220 130 180 130 60   # proxima pagina: Spotify
+wait 500
+shot s01_tocando.png
+spotify paused
+shot s02_pausado.png
+spotify idle
+shot s03_sem_dispositivo.png
+spotify error
+shot s04_erro.png
+spotify playing
+tap 287 20                 # engrenagem
+wait 300
+shot s05_conta.png
+tap 237 172                # Configurar
+wait 300
+shot s06_configurar.png
+tap 265 21                 # Voltar
+wait 300
+spotify none
+shot s07_sem_conta.png

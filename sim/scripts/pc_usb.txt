@@ -1,0 +1,26 @@
+# Fonte do PC (USB ou Wi-Fi), tela do agente com "Escolher PC" e a escolha/fixacao.
+wait 300
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 500
+pc online
+shot u01_pc_usb.png
+pc wifi
+shot u02_pc_wifi.png
+pc offline
+shot u03_pc_offline.png
+pc online
+tap 287 20                 # engrenagem
+wait 300
+shot u04_agente.png
+tap 160 171                # Escolher PC
+wait 300
+shot u05_escolher_automatico.png
+tap 160 148                # Notebook: fixa
+wait 300
+shot u06_escolher_fixado.png

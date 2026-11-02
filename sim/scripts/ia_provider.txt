@@ -1,0 +1,12 @@
+# Pagina de uma IA (modo separado) com horario de reset em outro dia: cabia mal.
+# Rodar com --set ia_sep=1 --set theme=1 --set bright=255
+wait 300
+usage claude direct
+usage codex high
+wait 1500
+swipe 220 130 180 130 60
+wait 1200
+shot ia_claude.png
+swipe 220 130 180 130 60
+wait 1200
+shot ia_codex.png

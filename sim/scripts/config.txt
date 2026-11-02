@@ -1,0 +1,26 @@
+# Configuracoes: contas, relogio, paginas e confirmacoes (tema escuro, relogio digital).
+wait 300
+usage claude direct
+usage codex none
+usage agy none
+spotify playing
+pc online
+wait 800
+swipe 160 100 160 140 60   # ajustes rapidos
+wait 1200
+tap 160 198                # Configuracoes
+wait 600
+shot s01_config.png
+tap 160 83                 # Claude (conectado): tela da conta
+wait 500
+shot s02_conta_claude.png
+tap 23 21                  # voltar
+wait 300
+tap 160 121                # Codex (sem conta): tela de configuracao
+wait 500
+shot s03_conta_codex.png
+tap 23 21
+wait 300
+swipe 160 200 160 80 150   # rola a lista
+wait 500
+shot s04_config_rolada.png

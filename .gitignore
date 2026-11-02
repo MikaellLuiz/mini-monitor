@@ -1,0 +1,9 @@
+.venv/
+.pio/
+.sim_build/
+sim_shots/
+.build_app/
+dist/
+__pycache__/
+
+.sim_build32/

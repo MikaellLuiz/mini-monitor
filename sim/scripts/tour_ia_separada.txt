@@ -1,0 +1,22 @@
+# Versao "IA separada": build_sim.py --script sim/scripts/tour_ia_separada.txt --set ia_sep=1
+wait 300
+usage claude direct
+usage codex high
+usage agy none
+wait 1500
+swipe 220 130 180 130 60
+wait 1200
+shot b01_claude.png
+swipe 220 130 180 130 60
+wait 1200
+shot b02_codex.png
+swipe 220 130 180 130 60
+wait 1200
+shot b03_antigravity.png
+swipe 180 130 220 130 60
+wait 600
+swipe 180 130 220 130 60
+wait 600
+tap 220 100                # cartoes do Claude: tela da conta
+wait 600
+shot b04_conta.png

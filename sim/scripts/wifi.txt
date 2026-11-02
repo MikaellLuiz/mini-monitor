@@ -1,0 +1,37 @@
+# Telas do Wi-Fi em cada estado.
+wait 300
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 400
+swipe 220 130 180 130 60
+wait 400
+shot w01_conectado.png
+wifi offline
+shot w02_offline.png
+wifi connecting
+shot w03_conectando.png
+wifi connected
+tap 82 180                 # Redes salvas
+wait 200
+shot w04_salvas.png
+tap 160 89                 # primeira rede: folha de acoes
+wait 200
+shot w05_acoes.png
+tap 160 210                # Cancelar
+tap 265 21                 # Voltar
+wait 200
+tap 160 128                # Adicionar via celular -> portal
+wifi portal
+shot w06_portal.png
+tap 265 21                 # Cancelar portal
+wait 700
+swipe 160 100 160 140 60   # painel de ajustes
+wait 400
+shot w07_painel.png
+swipe 160 140 160 100 60
+wait 400
+wifi empty
+shot w08_sem_redes.png

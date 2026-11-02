@@ -1,0 +1,30 @@
+# Passa pelas paginas, pelos atalhos do Relogio, pelo toque nos cartoes e pelos ajustes.
+wait 300
+usage claude direct
+usage codex direct
+usage agy none
+spotify playing
+pc online
+wait 1500
+shot n01_relogio.png
+tap 80 183                 # atalho "5h reinicia": leva ao Uso de IA
+wait 800
+shot n02_uso.png
+tap 160 66                 # cartao do Claude (conectado): atualiza
+wait 150
+shot n03_uso_atualizando.png
+swipe 220 130 180 130 60
+wait 1200
+shot n04_spotify.png
+swipe 220 130 180 130 60
+wait 1200
+tap 160 78                 # segundo atalho
+wait 300
+shot n05_atalhos.png
+swipe 220 130 180 130 60
+wait 1200
+shot n06_pc.png
+swipe 160 100 160 140 60   # para baixo: ajustes rapidos
+wait 1200
+shot n07_ajustes_rapidos.png
+tap 160 242

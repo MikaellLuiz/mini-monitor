@@ -1,0 +1,46 @@
+# Opcoes do Relogio, Paginas e confirmacoes.
+wait 300
+usage claude direct
+usage codex none
+usage agy none
+wait 800
+swipe 160 100 160 140 60
+wait 1200
+tap 160 198
+wait 600
+swipe 160 220 160 40 200   # rola ate o fim
+wait 500
+swipe 160 220 160 40 200
+wait 500
+shot t01_config_fim.png
+tap 160 168                # Reiniciar o painel
+wait 400
+shot t02_confirma_reiniciar.png
+tap 92 161                 # Cancelar
+wait 300
+tap 160 206                # Redefinir tudo
+wait 400
+shot t03_confirma_redefinir.png
+tap 92 161                 # Cancelar
+wait 300
+swipe 160 60 160 220 200   # volta ao topo
+wait 400
+swipe 160 60 160 220 200
+wait 400
+swipe 160 200 160 80 150   # mesma rolagem do roteiro config
+wait 500
+tap 160 172                # Relogio
+wait 500
+shot t04_relogio_opcoes.png
+tap 121 75                 # estilo Analogico
+wait 400
+tap 252 75                 # estilo Anel
+wait 400
+shot t05_relogio_anel_escolhido.png
+tap 23 21                  # voltar
+wait 300
+tap 23 21                  # voltar das configuracoes
+wait 300
+tap 160 242
+wait 400
+shot t06_relogio_anel.png
