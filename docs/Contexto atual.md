@@ -1,6 +1,6 @@
 ---
 tipo: contexto
-data: 2026-10-31
+data: 2026-11-02
 tags: [tema/estado]
 ---
 
@@ -17,6 +17,45 @@ tags: [tema/estado]
   - agente do PC com métricas e atalhos.
 - Novo design das telas aplicado (`src/theme.cpp`, página Relógio, Ajustes em
   lista, páginas configuráveis `pg_hide`/`ia_sep`).
+
+## Estado em 2026-11-02
+
+Feito e testado na placa:
+
+- PIN, USB e agente do PC funcionando.
+- Codex, Claude e Antigravity com HTTP 200, depois de:
+  - reserva de heap para a TLS em bloco único;
+  - pilhas medidas (usage 10 KB, spotify 8 KB, pcstep 3,5 KB);
+  - `BUF_LINES` 8;
+  - watchdog das tasks em 15 s.
+- O `maior_bloco` do heap é arredondado pelo alocador TLSF (32756 = 32768 - 12 etc.):
+  não usar como limiar exato.
+
+Gravado mas **não testado na placa** (ela não estava conectada para gravar):
+
+- Configuracoes > Tela > "Fluidez e transicao" (commit a9fea01).
+
+Pendente:
+
+- Testar na placa a TLS do Spotify com a pilha de 8 KB.
+- Fluidez com 12/16 linhas e o Codex com 16.
+- Latência dos atalhos e comandos do Spotify (log "toque->envio").
+- Fase 2 (contas no programa do PC).
+- HTTP de configuração com PIN.
+- Reduzir buffers do mbedTLS se a memória voltar a faltar.
+
+### Como continuar em outro PC (Windows)
+
+1. Clonar o repositório e criar o ambiente:
+   `python -m venv .venv` e
+   `.venv/Scripts/pip install platformio esptool ziglang pyserial psutil zeroconf pywebview pystray pyinstaller`.
+2. Compilar: `.venv/Scripts/pio run`.
+3. Gravar: a porta COM muda de PC para PC (`platformio.ini` tem `upload_port = COM5`), então
+   `.venv/Scripts/pio run -t upload --upload-port COMx`, segurando BOOT, tocando RST e mantendo
+   BOOT até o fim. Fechar o `PainelCYD.exe` antes de gravar.
+4. O programa do PC é gerado com `python tools/pc_agent/build_app.py` (`dist/` não vai para o git).
+5. Contas e PIN ficam na placa; o token do PC fica em `%APPDATA%\painel-agent\config.json`
+   (fora do git). No outro PC o PIN será pedido uma vez.
 
 ## Em andamento
 
@@ -39,7 +78,6 @@ tags: [tema/estado]
 
 ## Pendências
 
-- O repositório git foi criado em 2026-10-31 (`git init`), sem commit inicial.
 - Instalar o agente na inicialização: `tools/pc_agent/install_startup.ps1`
   existe mas não foi executado.
 - Marco 8: atualização de firmware pela rede (OTA) e relay.
