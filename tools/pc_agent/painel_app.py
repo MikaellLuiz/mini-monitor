@@ -26,6 +26,25 @@ from ui_server import UiServer  # noqa: E402
 LOCK_PORT = 8767  # so uma copia do programa: a segunda so pede para a primeira mostrar a janela
 
 
+def open_url(url):
+    """Abre o navegador padrao. No executavel do PyInstaller o LD_LIBRARY_PATH aponta para as
+    bibliotecas embutidas e o navegador (processo filho) falha em silencio: restaura o original."""
+    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+        import subprocess
+        env = dict(os.environ)
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        env.pop("LD_LIBRARY_PATH", None)
+        if orig:
+            env["LD_LIBRARY_PATH"] = orig
+        try:
+            subprocess.Popen(["xdg-open", url], env=env, start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        except OSError:
+            pass
+    webbrowser.open(url)
+
+
 class Instance:
     """Instancia unica por socket local."""
 
@@ -95,7 +114,7 @@ class App:
                 return
             except Exception:
                 pass
-        webbrowser.open(self.ui.url)
+        open_url(self.ui.url)
 
     def quit(self, *_):
         self.quitting = True
@@ -162,7 +181,7 @@ class App:
 
         # navegador + bandeja (Linux) ou so o agente
         if not self.args.minimized:
-            webbrowser.open(url)
+            open_url(url)
         if self.icon:
             self.icon.run()  # bloqueia ate "Sair"
         else:

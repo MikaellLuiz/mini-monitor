@@ -7,6 +7,7 @@ Linux:   volume por pactl, midia por playerctl, outras teclas por xdotool (so X1
 import ctypes
 import glob
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -77,6 +78,35 @@ LINUX_DIRECT = {
 }
 
 
+# Sem pactl/playerctl/xdotool (Ubuntu com PipeWire e Wayland): wpctl, MPRIS pelo D-Bus e o portal de captura.
+WPCTL = {
+    "volume_mute": ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"],
+    "volume_down": ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"],
+    "volume_up": ["wpctl", "set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", "5%+"],
+}
+MPRIS_METHOD = {"media_next": "Next", "media_prev": "Previous", "media_stop": "Stop", "media_play_pause": "PlayPause"}
+
+
+def _mpris(method):
+    """Manda o comando ao primeiro player MPRIS aberto (Spotify, navegador...)."""
+    out = subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.DBus", "--object-path",
+                          "/org/freedesktop/DBus", "--method", "org.freedesktop.DBus.ListNames"],
+                         capture_output=True, text=True, timeout=3).stdout
+    names = [n for n in re.findall(r"'(org\.mpris\.MediaPlayer2\.[^']+)'", out)]
+    if not names:
+        raise ValueError("nenhum player de midia aberto")
+    subprocess.Popen(["gdbus", "call", "--session", "--dest", names[0], "--object-path", "/org/mpris/MediaPlayer2",
+                      "--method", f"org.mpris.MediaPlayer2.Player.{method}"], close_fds=True,
+                     stdout=subprocess.DEVNULL)
+
+
+def _portal_screenshot():
+    """Captura de tela no Wayland: o portal abre o seletor do GNOME/KDE."""
+    subprocess.Popen(["gdbus", "call", "--session", "--dest", "org.freedesktop.portal.Desktop", "--object-path",
+                      "/org/freedesktop/portal/desktop", "--method", "org.freedesktop.portal.Screenshot.Screenshot",
+                      "", "{'interactive': <true>}"], close_fds=True, stdout=subprocess.DEVNULL)
+
+
 def vk_of(name):
     name = name.lower()
     if name in VK:
@@ -100,6 +130,15 @@ def _press_linux(combo):
     if len(parts) == 1 and parts[0] in LINUX_DIRECT and shutil.which(LINUX_DIRECT[parts[0]][0]):
         subprocess.Popen(LINUX_DIRECT[parts[0]], close_fds=True)
         return
+    if len(parts) == 1 and parts[0] in WPCTL and shutil.which("wpctl"):
+        subprocess.Popen(WPCTL[parts[0]], close_fds=True)
+        return
+    if len(parts) == 1 and parts[0] in MPRIS_METHOD and shutil.which("gdbus"):
+        _mpris(MPRIS_METHOD[parts[0]])
+        return
+    if parts == ["print"] and not shutil.which("xdotool") and shutil.which("gdbus"):
+        _portal_screenshot()
+        return
     keys = []
     for p in parts:
         if p in XDO:
@@ -109,7 +148,7 @@ def _press_linux(combo):
         else:
             raise ValueError(f"tecla desconhecida: {p}")
     if not shutil.which("xdotool"):
-        raise ValueError("instale o xdotool (sudo apt install xdotool); ele so funciona no X11")
+        raise ValueError("teclas combinadas precisam do xdotool (sudo apt install xdotool) e de uma sessao X11")
     subprocess.Popen(["xdotool", "key", "+".join(keys)], close_fds=True)
 
 

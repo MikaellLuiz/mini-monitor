@@ -170,6 +170,7 @@ class UsbBridge:
         self._stop = threading.Event()
         self._last_shortcuts = 0.0
         self._misses = 0
+        self._paused_until = 0.0
 
     # ---- conexao ----------------------------------------------------------------
 
@@ -180,17 +181,29 @@ class UsbBridge:
     def _candidates(self):
         return [self.cfg["usb_port"]] if self.cfg.get("usb_port") else find_ports()
 
+    def _hello(self, link, tries=5):
+        """Abrir a serial reinicia a placa (DTR/RTS): ela leva alguns segundos para atender.
+        Repete na mesma conexao; fechar e reabrir reiniciaria a placa de novo, num ciclo sem fim."""
+        for i in range(tries):
+            try:
+                return link.request("hello")
+            except LinkError:
+                if i == tries - 1 or link.dead:
+                    raise
+
     def connect(self):
         """Abre a placa e tenta o token salvo. Devolve o estado."""
         with self._lock:
             if self.link and not self.link.dead:
                 return self.state
             self.drop()
+            if time.time() < self._paused_until:  # gravando o firmware: a porta e do esptool
+                return self.state
             for port in self._candidates():
                 link = None
                 try:
                     link = Link(port, on_event=self._on_event, on_line=self.board_log.write if self.board_log else None)
-                    hello = link.request("hello")
+                    hello = self._hello(link)
                 except LinkError:
                     if link:  # sem fechar, a porta ficaria presa e nenhuma nova tentativa abriria
                         link.close()
@@ -223,6 +236,15 @@ class UsbBridge:
             self.state, self.retry_s = "bloqueada", hello["locked_s"]
         else:
             self.state = "precisa_pin" if hello.get("has_pin") else "precisa_criar_pin"
+
+    def pause(self, seconds=120):
+        """Solta a porta para o esptool gravar. Expira sozinha, caso o gravador morra no meio."""
+        with self._lock:
+            self._paused_until = time.time() + seconds
+            self.drop()
+
+    def resume(self):
+        self._paused_until = 0.0
 
     def drop(self):
         if self.link:

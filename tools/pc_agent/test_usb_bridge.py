@@ -67,6 +67,16 @@ class UsbBridgeTests(unittest.TestCase):
         self.assertTrue(e.saved)
         self.assertEqual(e.bridge.state, "autenticado")
 
+    def test_pause_releases_the_port_until_resume(self):
+        e = self.env()
+        e.bridge.connect()
+        e.bridge.pause(60)
+        self.assertIsNone(e.bridge.link)
+        self.assertEqual(e.bridge.connect(), "sem_placa")  # pausado: nao reabre a porta
+        self.assertIsNone(e.bridge.link)
+        e.bridge.resume()
+        self.assertEqual(e.bridge.connect(), "precisa_criar_pin")
+
     def test_invalid_pin_is_refused(self):
         e = self.env()
         e.bridge.connect()

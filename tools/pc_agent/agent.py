@@ -251,6 +251,10 @@ class ControlHandler(http.server.BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "err": "pedido invalido"})
         from usb_bridge import LinkError
         try:
+            if cmd in ("pause_usb", "resume_usb"):  # tools/flash.py: grava sem fechar o programa
+                if BRIDGE:
+                    BRIDGE.pause(int(body.get("seconds", 120))) if cmd == "pause_usb" else BRIDGE.resume()
+                return self._json(200, {"ok": True})
             if cmd == "bridge_status":
                 return self._json(200, {"ok": True, "state": BRIDGE.state, "authed": BRIDGE.authed, "info": BRIDGE.info})
             if not BRIDGE.link or BRIDGE.link.dead:
