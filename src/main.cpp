@@ -24,7 +24,9 @@ static constexpr int ROTATION = 1;  // paisagem; 3 = girada 180 graus (recalibra
 // falhava. A TLS do chatgpt.com precisa de ~78 KB livres de heap, entao 12 linhas devolvem 15 KB a ela;
 // o custo e o dobro de blocos por redesenho (mais chamadas de flush; a varredura DMA e a mesma).
 // Para voltar a fluidez de antes, suba para 24 (ou 16/20 como meio-termo).
-static constexpr int BUF_LINES = 12;
+// Com 8 linhas (2 x 5 KB) sobram ~5 KB a mais para a TLS; custo: mais flushes por redesenho (12 -> 8 =
+// 1,5x blocos). Se a fluidez piorar, basta voltar a constante para 12.
+static constexpr int BUF_LINES = 8;
 // Toque resistivo com pouca forca falha por alguns ms no meio do arrasto; segurar
 // o "pressionado" nesse intervalo evita que o LVGL entenda como soltou.
 static constexpr uint32_t TOUCH_HOLD_MS = 50;

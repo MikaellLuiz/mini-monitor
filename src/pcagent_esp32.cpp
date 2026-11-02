@@ -109,7 +109,7 @@ static void saveAgents() {
   p.end();
 }
 
-static constexpr uint32_t PCSTEP_STACK = 6 * 1024;
+static constexpr uint32_t PCSTEP_STACK = 3584;  // medido: pico 1436 B (6144 - folga 4708) + ~2 KB de folga
 static constexpr uint32_t PCSTEP_EVERY_MS = 100;  // atalho pendente sai em ate ~100 ms
 void pc_step();
 static void pcStepTask(void *) {

@@ -32,7 +32,7 @@ static volatile SpotifyCmd pending = SpotifyCmd::None;
 static uint32_t nextPoll = 0;
 static TaskHandle_t spotTask = nullptr;
 static uint32_t cmdTapMs = 0;  // millis do toque do comando pendente (medida de latencia)
-static constexpr uint32_t SPOT_STACK = 8 * 1024;  // folga minima logada na task; ajustar com o log
+static constexpr uint32_t SPOT_STACK = 4 * 1024;  // medido: pico 1828 B (8192 - folga 6364) + ~2 KB de folga; ver log "[spotify] pilha"
 
 // Task propria no nucleo 0, prioridade da idle (como a "usage": ver usage_esp32.cpp). Acorda a cada 1 s
 // para o poll periodico, ou na hora por spotify_command().
