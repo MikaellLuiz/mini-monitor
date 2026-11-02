@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <lvgl.h>
+#include <esp_task_wdt.h>
 
 #include "lgfx_cyd.h"
 #include "quickpanel.h"
@@ -86,6 +87,13 @@ void setup() {
   Serial.setRxBufferSize(1024);  // comandos do programa do PC (usb_link) chegam em rajadas
   Serial.begin(115200);
   delay(200);
+  // A verificacao da cadeia do chatgpt.com (ECDSA) segura o nucleo 0 por mais de 5 s e a IDLE0 estourava o
+  // watchdog padrao. 15 s, mantendo o panico (nao desligar o watchdog).
+  {
+    esp_err_t wr = esp_task_wdt_init(15, true);
+    if (wr == ESP_OK) Serial.println("[wdt] task watchdog: 15 s");
+    else Serial.printf("[wdt] esp_task_wdt_init falhou: %d\n", (int)wr);
+  }
   Serial.println("\nPainel CYD - marco 1");
   logHeap("boot");
   heap_mark("boot (Serial.begin)");
