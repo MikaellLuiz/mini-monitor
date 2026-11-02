@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 #include <Arduino.h>
 #include <Preferences.h>
+#include "ui.h"
 #include <WiFi.h>
 #include <mbedtls/base64.h>
 
@@ -784,6 +785,12 @@ static uint32_t fetchAntigravity() {
 
 // ---- task --------------------------------------------------------------------
 
+// Pagina escondida (modo IA separada) = provedor desativado: nao gasta TLS nem rede com ele.
+static bool providerWanted(Provider p) {
+  if (!ui_ia_separate()) return true;  // modo junto: uma pagina so, sem chave por provedor
+  return ui_page_enabled(p == PROV_CLAUDE ? PG_CLAUDE : p == PROV_CODEX ? PG_CODEX : PG_AGY);
+}
+
 static bool ready() {
   uint32_t now;
   return WiFi.status() == WL_CONNECTED && epochNow(now);
@@ -812,7 +819,7 @@ static void task(void *) {
         nextAt = slots[p].nextAt;
         u = slots[p].u;
       }
-      if (token.isEmpty()) continue;
+      if (token.isEmpty() || !providerWanted(p)) continue;
       if (nextAt && (int32_t)(millis() - nextAt) < 0) continue;
       if (!ready()) {  // a interface ja mostra Waiting/Cache
         Guard g;
