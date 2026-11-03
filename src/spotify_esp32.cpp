@@ -264,7 +264,8 @@ static bool sendCommand(SpotifyCmd c, bool wasPlaying) {
   rq.headers = "Authorization: Bearer " + accessTok + "\r\nContent-Length: 0\r\nUser-Agent: painel-cyd/0.1\r\n";
   HttpsResult rs;
   https_send(rq, rs);
-  board_log("[spotify] comando %s %s: HTTP %d em %u ms", method, path + 3, rs.status, (unsigned)rs.total_ms);
+  board_log("[spotify] comando %s %s: HTTP %d em %u ms (hs %u ms)", method, path + 3, rs.status, (unsigned)rs.total_ms,
+            (unsigned)rs.handshake_ms);
   if (rs.status == 204 || rs.status == 200) {
     setError("");
     return true;
@@ -411,8 +412,8 @@ static void poll() {
   };
   HttpsResult rs;
   https_send(rq, rs);
-  board_log("[spotify] player: HTTP %d em %u ms | heap %u, bloco %u", rs.status, (unsigned)rs.total_ms,
-            ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  board_log("[spotify] player: HTTP %d em %u ms (hs %u ms) | heap %u, bloco %u", rs.status, (unsigned)rs.total_ms,
+            (unsigned)rs.handshake_ms, ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
   uint32_t wait = POLL_VISIBLE_MS;
   if (rs.status == 200 && parsed) {
