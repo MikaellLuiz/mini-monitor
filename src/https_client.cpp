@@ -233,6 +233,12 @@ static bool isMemOrCertFail(const String &err) {
 bool https_send(HttpsRequest &rq, HttpsResult &rs) {
   // Consulta de uso (nao a task interativa) cede a vez a um comando do Spotify pendente.
   bool yields = xTaskGetCurrentTaskHandle() != interactiveTask;
+  // Um comando do Spotify pendente entra antes: espera (teto 20 s) ate interactive cair.
+  if (yields && interactivePending) {
+    uint32_t w0 = millis();
+    while (interactivePending && millis() - w0 < 20000) delay(50);
+    Serial.printf("[https] %s%s: esperou %u ms por comando do Spotify\n", rq.host, rq.path, (unsigned)(millis() - w0));
+  }
   https_lock();
   if (!contiguousOk()) {
     // Sem nem 20 KB contiguos a TLS falharia: falha rapido e deixa o chamador adiar a consulta.

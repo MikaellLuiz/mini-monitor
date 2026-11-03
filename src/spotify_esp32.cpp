@@ -31,6 +31,10 @@ static volatile bool visible = false;
 static volatile SpotifyCmd pending = SpotifyCmd::None;
 static uint32_t nextPoll = 0;
 static TaskHandle_t spotTask = nullptr;
+static bool cmdWantPlay = false;  // estado otimista pedido no toque (a poll nao o sobrescreve)
+static bool afterCmd = false;  // a poll que segue um comando faz parte do toque: interactive so cai depois dela
+static uint32_t afterCmdMs = 0;
+static constexpr uint32_t AFTER_CMD_MAX_MS = 8000;  // teto: sem poll (pagina oculta) nao segura as consultas de uso
 static uint32_t cmdTapMs = 0;  // millis do toque do comando pendente (medida de latencia)
 static constexpr uint32_t SPOT_STACK = 8 * 1024;  // cobre o handshake TLS (accounts/api.spotify.com); 4 KB estourou o canario; ver log "[spotify] pilha"
 
@@ -177,7 +181,10 @@ void spotify_command(SpotifyCmd c) {
     pending = c;
     cmdTapMs = millis();
     st.busy = true;
-    if (c == SpotifyCmd::PlayPause) st.playing = !st.playing;  // resposta imediata na tela
+    if (c == SpotifyCmd::PlayPause) {
+      st.playing = !st.playing;  // resposta imediata na tela
+      cmdWantPlay = st.playing;
+    }
   }
   https_interactive(true);  // as consultas de uso em retentativa cedem a trava ate o comando terminar
   if (spotTask) xTaskNotifyGive(spotTask);  // acorda a task na hora, sem esperar o ciclo de 1 s
@@ -411,7 +418,7 @@ static void poll() {
   if (rs.status == 200 && parsed) {
     Guard g;
     st.active = true;
-    st.playing = r.is_playing;
+    if (pending == SpotifyCmd::None) st.playing = r.is_playing;  // com comando pendente vale o toque
     st.progress_ms = r.progress;
     st.duration_ms = r.duration;
     st.fetched_at_ms = millis();
@@ -441,7 +448,8 @@ static void poll() {
   }
   nextPoll = millis() + wait;
 
-  if (rs.status == 200 && parsed && !newCover.isEmpty() && newCover != coverUrl) {
+  // Comando pendente: a capa fica para a proxima poll (coverUrl intacta) e o comando sai antes.
+  if (rs.status == 200 && parsed && !newCover.isEmpty() && newCover != coverUrl && pending == SpotifyCmd::None) {
     coverUrl = newCover;
     fetchCover(newCover);
   }
@@ -452,6 +460,10 @@ void spotify_step() {
   {
     Guard g;
     if (!st.linked) return;
+  }
+  if (afterCmd && millis() - afterCmdMs > AFTER_CMD_MAX_MS) {
+    afterCmd = false;
+    if (pending == SpotifyCmd::None) https_interactive(false);
   }
   SpotifyCmd c = pending;
   if (c == SpotifyCmd::None && (!visible || (int32_t)(millis() - nextPoll) < 0)) return;
@@ -467,19 +479,20 @@ void spotify_step() {
     bool wasPlaying;
     {
       Guard g;
-      wasPlaying = !st.playing;  // spotify_command() ja inverteu o estado otimista
+      wasPlaying = !cmdWantPlay;  // a intencao do toque, nao st.playing (a poll pode te-lo sobrescrito)
     }
     // Latencia medida: do toque (spotify_command) ate aqui, logo antes do pedido HTTPS do comando.
     board_log("[spotify] comando %d: toque->envio %u ms", (int)c, (unsigned)(millis() - cmdTapMs));
     bool ok = sendCommand(c, wasPlaying);
-    https_interactive(false);
+    afterCmd = true;  // interactive segue ligado ate a poll seguinte (ou o teto)
+    afterCmdMs = millis();
     board_log("[spotify] comando %d: toque->resposta %u ms (%s)", (int)c, (unsigned)(millis() - cmdTapMs), ok ? "ok" : "falhou");
     {
       Guard g;
       st.busy = false;
       pending = SpotifyCmd::None;
       if (c == SpotifyCmd::PlayPause) {
-        heldPlaying = st.playing;  // o valor otimista que spotify_command() ja colocou
+        heldPlaying = cmdWantPlay;
         holdPlayingUntil = millis() + 3500;
       }
     }
@@ -487,4 +500,8 @@ void spotify_step() {
     return;
   }
   poll();
+  if (afterCmd) {
+    afterCmd = false;
+    if (pending == SpotifyCmd::None) https_interactive(false);
+  }
 }
