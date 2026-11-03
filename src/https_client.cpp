@@ -13,8 +13,8 @@ static SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
 // nucleo 0 e https_reserve_check no loop (nucleo 1).
 static constexpr size_t RESERVE_BYTES = 34 * 1000;  // ajustavel; o maior bloco ja visto passando foi 34804
 // A TLS pega dois buffers de ~16,7 KB que NAO precisam ser adjacentes (conexoes completaram com maior
-// bloco 32756). So pula a TLS quando nem um buffer cabe com folga: maior bloco < 20 KB.
-static constexpr uint32_t TLS_MIN_BLOCK = 20 * 1024;
+// bloco 32756). So pula a TLS quando nem um buffer cabe com folga: maior bloco < 16 KB (a TLS do Spotify passou com 21 KB; 20 KB recusava consultas por 12 bytes).
+static constexpr uint32_t TLS_MIN_BLOCK = 16 * 1024;
 static constexpr uint32_t REALLOC_MIN_FREE = 24 * 1024;  // so reserva se sobrar isso depois
 static constexpr uint32_t VALVE_MIN_FREE = 16 * 1024;    // abaixo disso a valvula solta o lastro
 static SemaphoreHandle_t resMutex = xSemaphoreCreateMutex();
@@ -49,13 +49,18 @@ static void reserveFree() {
 }
 static void reserveTry() {
   if (reserve) return;
-  // So refaz se ha um buraco claramente maior que o lastro: com bloco menor o malloc roubaria de um
-  // buraco que a TLS precisa (ajudaria o lastro e atrapalharia a conexao).
-  if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < RESERVE_BYTES + 2048 || ESP.getFreeHeap() < REALLOC_MIN_FREE) {
+  // O lastro segura o maior buraco enquanto nao ha TLS, para pequenas alocacoes nao o fatiarem. Depois de
+  // uma TLS o buraco que sobra (~32,7 KB) e menor que RESERVE_BYTES + 2 KB: exigir o tamanho cheio
+  // deixava o buraco sem lastro e ele se fragmentava ate < TLS_MIN_BLOCK (Claude e Spotify
+  // "sem memoria contigua"). Entao o lastro encolhe para caber no que existe; ao ser liberado, a TLS
+  // recebe o buraco inteiro de novo.
+  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (largest < TLS_MIN_BLOCK + 2048 || ESP.getFreeHeap() < REALLOC_MIN_FREE) {
     noteState("sem espaco", nullptr);
     return;
   }
-  reserve = heap_caps_malloc(RESERVE_BYTES, MALLOC_CAP_8BIT);
+  size_t want = largest - 2048 < RESERVE_BYTES ? largest - 2048 : RESERVE_BYTES;
+  reserve = heap_caps_malloc(want, MALLOC_CAP_8BIT);
   if (reserve && ESP.getFreeHeap() < REALLOC_MIN_FREE) {
     free(reserve);
     reserve = nullptr;
@@ -105,7 +110,7 @@ void https_reserve_check() {
 }
 
 // Depois do lock a reserva ja foi devolvida: o maior bloco livre e o que a TLS vai ter. Abaixo de
-// TLS_MIN_BLOCK (20 KB) espera 200 ms e le de novo (outra task pode liberar algo); se continuar baixo, nao
+// TLS_MIN_BLOCK (16 KB) espera 200 ms e le de novo (outra task pode liberar algo); se continuar baixo, nao
 // vale tentar (falharia em ~100 ms por "Memory allocation failed", tres vezes).
 static bool contiguousOk() {
   if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= TLS_MIN_BLOCK) return true;
