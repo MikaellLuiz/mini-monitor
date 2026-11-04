@@ -1,6 +1,6 @@
 ---
 tipo: contexto
-data: 2026-11-02
+data: 2026-11-04
 tags: [tema/estado]
 ---
 
@@ -11,25 +11,21 @@ tags: [tema/estado]
 - Marcos 1 a 7 prontos e validados na placa:
   - display e toque;
   - Wi-Fi com portal;
-  - TLS;
-  - uso de Claude, Codex e Antigravity;
-  - Spotify;
-  - agente do PC com métricas e atalhos.
-- Novo design das telas aplicado (`src/theme.cpp`, página Relógio, Ajustes em
-  lista, páginas configuráveis `pg_hide`/`ia_sep`).
+  - TLS e memória estáveis com reserva direta de 2 blocos no `mbedtls_calloc`;
+  - uso de Claude, Codex e Antigravity com leitura HTTP 200/429;
+  - Spotify com retomada de sessão TLS (latência ~500–800 ms);
+  - agente do PC com métricas e atalhos (Linux e Windows).
+- Novo design das telas aplicado e ativo (`src/theme.cpp`, página Relógio, Ajustes em
+  lista, modo IA unificada, telemetria de FPS removida).
 
-## Estado em 2026-11-02
+## Estado em 2026-11-04
 
 Feito e testado na placa:
 
-- PIN, USB e agente do PC funcionando.
-- Codex, Claude e Antigravity com HTTP 200, depois de:
-  - reserva de heap para a TLS em bloco único;
-  - pilhas medidas (usage 10 KB, spotify 8 KB, pcstep 3,5 KB);
-  - `BUF_LINES` 8;
-  - watchdog das tasks em 15 s.
-- O `maior_bloco` do heap é arredondado pelo alocador TLSF (32756 = 32768 - 12 etc.):
-  não usar como limiar exato.
+- **Estabilidade TLS definitiva**: `mbedtls_platform_set_calloc_free` entrega `reserve[0..1]` diretamente ao `mbedtls_ssl_setup` (evita o split de 668 B do TLSF). Heap livre ~61 KB e `reserva=2` mantida o tempo todo.
+- **Fim dos reinícios falsos**: eliminado o underflow unsigned de 1 ms (`4294967 s`), o timer contínuo de 3 min em Wi-Fi offline e a reabertura serial em falha isolada de `shortcuts`.
+- **Nova interface gráfica**: tela de IA unificada (`5 paginas, IA junta`), novo layout de temas/relógio e remoção da flag `-DUI_PERF`.
+- **Spotify**: 100% das conexões subsequentes com retomada de sessão TLS (`retomou=1`, handshake ~150–260 ms).
 
 Gravado mas **não testado na placa** (ela não estava conectada para gravar):
 
