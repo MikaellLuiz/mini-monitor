@@ -58,6 +58,15 @@ class UsbBridgeTests(unittest.TestCase):
         self.board.send_raw(PREFIX + "isto nao e json\n")
         self.assertEqual(e.bridge.request("hello")["has_pin"], False)
 
+    def test_splits_prefix_glued_to_log_line(self):
+        logs = []
+        e = self.env()
+        e.bridge.connect()
+        e.bridge.link.on_line = logs.append
+        e.bridge.link._handle('[spotify] player: HTTP 200 | bloco 12276@PC {"evt":"action","idx":2}')
+        self.assertEqual(logs, ["[spotify] player: HTTP 200 | bloco 12276"])
+        self.assertEqual(e.actions, [2])
+
     def test_first_setup_creates_pin_and_saves_token(self):
         e = self.env()
         e.bridge.connect()
@@ -219,9 +228,9 @@ class UsbBridgeTests(unittest.TestCase):
         calls = {"n": 0}
 
         def flaky(link, cmd, **kw):
-            if cmd == "metrics" and calls["n"] < 2:
+            if cmd in ("metrics", "shortcuts") and calls["n"] < 2:
                 calls["n"] += 1
-                raise LinkError("a placa nao respondeu a 'metrics'")
+                raise LinkError(f"a placa nao respondeu a '{cmd}'")
             return real(link, cmd, **kw)
 
         Link.request = flaky

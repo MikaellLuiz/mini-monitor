@@ -21,6 +21,8 @@
 static constexpr uint32_t INTERVAL_MS = 5 * 60 * 1000;
 static constexpr uint32_t RETRY_MS = 60 * 1000;            // falha de rede/servidor
 static constexpr uint32_t MEMFAIL_RETRY_MS = 150 * 1000;  // falha X509/memoria: nao martela a trava
+static constexpr uint32_t BOOT_WAIT_MS = 30 * 1000;       // 1a rodada: espera o Spotify, no maximo isto apos o Wi-Fi
+static constexpr uint32_t FIRST_SPACING_MS = 15 * 1000;   // 1a rodada: intervalo entre provedores
 static constexpr uint32_t AUTH_RETRY_MS = 30 * 60 * 1000;  // login/token recusado
 static constexpr uint32_t TASK_STACK = 10 * 1024;  // medido: pico 7168 B com a TLS do chatgpt.com (9216 deixou so 2048 B) + ~3 KB de folga
 static constexpr uint32_t REFRESH_MARGIN_S = 300;  // renova o access token 5 min antes de vencer
@@ -235,7 +237,7 @@ static bool epochNow(uint32_t &now) { return board_epoch_now(&now); }
 // ---- Claude ------------------------------------------------------------------
 
 // Retorna o atraso ate a proxima tentativa.
-static uint32_t fetchClaude(const String &token) {
+static uint32_t fetchClaude(String &token) {
   HttpsHeader want[] = {
       {"anthropic-ratelimit-unified-5h-utilization"}, {"anthropic-ratelimit-unified-5h-reset"},
       {"anthropic-ratelimit-unified-7d-utilization"}, {"anthropic-ratelimit-unified-7d-reset"},
@@ -247,6 +249,7 @@ static uint32_t fetchClaude(const String &token) {
   rq.headers = "Authorization: Bearer " + token +
                "\r\nanthropic-version: 2023-06-01\r\nanthropic-beta: oauth-2025-04-20\r\n"
                "Content-Type: application/json\r\nUser-Agent: claude-code/2.1.5\r\n";
+  token = String();  // libera a copia antes da TLS
   // Sem o bloco de identidade do Claude Code no `system`, a API responde a tokens de
   // assinatura com 429 "Error" sem headers (anthropics/claude-code#103731).
   rq.body = String("{\"model\":\"") + CLAUDE_MODEL +
@@ -318,6 +321,7 @@ static bool codexRefresh(bool &authFailed) {
   rq.headers = "Content-Type: application/json\r\nUser-Agent: painel-cyd/0.1\r\n";
   rq.body = String("{\"client_id\":\"") + CODEX_CLIENT_ID +
             "\",\"grant_type\":\"refresh_token\",\"refresh_token\":\"" + refresh + "\"}";
+  refresh = String();
   bool saved = false;
   rq.onBody = [&](Stream &s) {
     skipToJson(s);
@@ -394,6 +398,8 @@ static uint32_t fetchCodex() {
   rq.http10 = true;
   rq.headers = "Authorization: Bearer " + access + "\r\nChatGPT-Account-Id: " + account +
                "\r\nAccept: application/json\r\nUser-Agent: painel-cyd/0.1\r\n";
+  access = String();
+  account = String();
   rq.onBody = [&](Stream &s) {
     skipToJson(s);
     JsonDocument filter;
@@ -628,6 +634,7 @@ static bool agyRefresh(bool &authFailed) {
   rq.headers = "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: antigravity\r\n";
   rq.body = String("client_id=") + AGY_CLIENT_ID + "&client_secret=" + AGY_CLIENT_SECRET +
             "&grant_type=refresh_token&refresh_token=" + urlEncode(refresh);
+  refresh = String();
   bool got = false;
   rq.onBody = [&](Stream &s) {
     skipToJson(s);
@@ -734,6 +741,8 @@ static uint32_t fetchAntigravity() {
   rq.http10 = true;
   rq.headers = "Authorization: Bearer " + access + "\r\nContent-Type: application/json\r\nUser-Agent: " + AGY_UA + "\r\n";
   rq.body = "{\"project\":\"" + project + "\"}";
+  access = String();
+  project = String();
   rq.onBody = [&](Stream &s) {
     skipToJson(s);
     JsonDocument filter;
@@ -798,7 +807,13 @@ static bool ready() {
 
 static void task(void *) {
   bool forced[PROV_COUNT] = {};
+  bool firstDone[PROV_COUNT] = {};  // ja fez a 1a consulta (do boot ou forcada)
+  uint32_t wifiAt = 0, lastFirstAt = 0;
   for (;;) {
+    if (!wifiAt && WiFi.status() == WL_CONNECTED) {
+      uint32_t now = millis();
+      wifiAt = now ? now : 1;
+    }
     loginStep();  // o Spotify tem task propria ("spotify", spotify_esp32.cpp)
     if (refreshRequested) {
       refreshRequested = false;
@@ -826,8 +841,19 @@ static void task(void *) {
         slots[p].refreshing = false;  // nunca fica preso sem Wi-Fi/NTP
         continue;
       }
+      if (!forced[p] && !firstDone[p]) {
+        // Boot: o Spotify busca o token antes (heap ainda inteiro); depois os provedores um a cada 15 s.
+        if (!spotify_boot_done() && (int32_t)(millis() - wifiAt) < (int32_t)BOOT_WAIT_MS) continue;
+        if (lastFirstAt && (int32_t)(millis() - lastFirstAt) < (int32_t)FIRST_SPACING_MS) continue;
+      }
       if (p == PROV_CLAUDE && !forced[p] && claudeWindowClosed(u)) continue;
+      if (!forced[p]) {
+        uint32_t now = millis();
+        lastFirstAt = now ? now : 1;
+      }
+      firstDone[p] = true;
       forced[p] = false;
+      if (p != PROV_CLAUDE) token = String();  // nao segurar o refresh token (~1 KB no Codex) durante a TLS
       https_take_memcert_fail();  // limpa qualquer resto antes desta consulta
       uint32_t delayMs = p == PROV_CLAUDE ? fetchClaude(token) : p == PROV_CODEX ? fetchCodex() : fetchAntigravity();
       if (https_take_memcert_fail() && delayMs < MEMFAIL_RETRY_MS) {

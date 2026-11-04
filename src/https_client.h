@@ -33,7 +33,6 @@ struct HttpsResult {
   int status = 0;  // 0 = sem resposta HTTP
   String error;    // falha de conexao/TLS
   String body;     // ate max_body bytes
-  String statusLine;  // primeira linha crua da resposta (diagnostico)
   uint32_t handshake_ms = 0;
   uint32_t total_ms = 0;
   // A falha foi X509 FATAL ou "Memory allocation failed": repetir nao muda o resultado (so segura a
@@ -63,7 +62,13 @@ void https_heap_frag(unsigned *freeBlocks, unsigned *largest);
 // check: a cada ~1 s no loop; solta o lastro se o heap livre ficar baixo. Nao bloqueia.
 void https_reserve_init();
 void https_reserve_check();
-int https_reserve_held();  // 1 se o bloco unico do lastro esta em maos, 0 se nao
+int https_reserve_held();  // quantos blocos do lastro estao em maos (0, 1 ou 2)
+
+// Vigia de rede: instante (millis, nunca 0) da ultima TLS ok de qualquer host (0 = nenhuma ainda) e quantas
+// https_send falharam por motivo que NAO e memoria desde entao. O wifi_loop usa; zera ao reconectar.
+uint32_t https_last_ok_ms();
+uint32_t https_nonmem_fails();
+void https_net_fails_reset();
 
 bool https_send(HttpsRequest &rq, HttpsResult &rs);
 

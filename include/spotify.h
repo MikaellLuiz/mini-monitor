@@ -44,3 +44,5 @@ void spotify_forget_account();
 
 void spotify_begin();  // chamar uma vez, antes da interface
 void spotify_step();   // chamado pela task "spotify" (a cada segundo ou ao receber um comando)
+// true quando a busca inicial do token terminou (ok ou falha) ou a conta nao esta ligada.
+bool spotify_boot_done();

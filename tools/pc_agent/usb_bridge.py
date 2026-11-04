@@ -101,9 +101,14 @@ class Link:
 
     def _handle(self, line):
         if not line.startswith(PREFIX):  # log da placa
-            if self.on_line and line.strip():
-                self.on_line(line)
-            return
+            at = line.find(PREFIX)
+            if at < 0:
+                if self.on_line and line.strip():
+                    self.on_line(line)
+                return
+            if self.on_line and line[:at].strip():
+                self.on_line(line[:at])
+            line = line[at:]
         try:
             msg = json.loads(line[len(PREFIX):])
         except ValueError:
@@ -287,10 +292,10 @@ class UsbBridge:
 
     def _tick(self):
         now = time.time()
-        if now - self._last_shortcuts > SHORTCUTS_EVERY_S:
-            self._last_shortcuts = now
-            self.request("shortcuts", labels=self.shortcuts_fn())
         try:
+            if now - self._last_shortcuts > SHORTCUTS_EVERY_S:
+                self.request("shortcuts", labels=self.shortcuts_fn())
+                self._last_shortcuts = now
             r = self.request("metrics", name=self.cfg["name"], **self.metrics_fn())
         except LinkError:
             # A placa fica ocupada por alguns segundos durante uma conexao TLS (consulta de uso): uma

@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "board.h"
+#include "https_client.h"
 #include "wifi_mgr.h"
 
 static const char *NVS_NS = "wifi";
@@ -42,6 +43,9 @@ static int attempt = 0;
 static int backoffIdx = 0;
 static String curSsid;
 static bool ntpStarted = false;
+static constexpr uint32_t NET_WATCH_MS = 5 * 60 * 1000;
+static constexpr uint32_t NET_WATCH_FAILS = 3;
+static bool netWatchFired = false;  // ja reconectou uma vez sem voltar a ter TLS ok
 
 static DNSServer *dns = nullptr;
 static WebServer *web = nullptr;
@@ -391,12 +395,31 @@ void wifi_loop() {
       }
       break;
     }
-    case WifiState::Connected:
+    case WifiState::Connected: {
       if (WiFi.status() != WL_CONNECTED) {
         board_log("wifi: conexao caiu");
         startScan();
+        break;
+      }
+      // Vigia: Wi-Fi "conectado" mas a rede nao serve (visto >1 h sem TLS). Referencia = ultimo sucesso ou, se
+      // nao houve desde a conexao, o instante da conexao. So age com >= 3 falhas nao-memoria (ocioso nao conta).
+      uint32_t ref = stateSince, okAt = https_last_ok_ms();
+      if (okAt && (int32_t)(okAt - ref) > 0) {
+        ref = okAt;
+        netWatchFired = false;
+      }
+      if ((int32_t)(millis() - ref) > (int32_t)NET_WATCH_MS && https_nonmem_fails() >= NET_WATCH_FAILS) {
+        https_net_fails_reset();
+        if (netWatchFired) {
+          board_log("wifi: sem trafego de novo apos reconectar, reiniciando");
+          board_restart();
+        }
+        netWatchFired = true;
+        board_log("wifi: sem trafego ha 5 min, reconectando");
+        startScan();  // disconnect + varredura + conexao pelo caminho normal
       }
       break;
+    }
     case WifiState::Offline:
       if (retryAt && (int32_t)(millis() - retryAt) >= 0) startScan();
       break;

@@ -28,6 +28,7 @@ static String clientId, refreshToken, accessTok;
 static uint32_t accessValidUntil = 0;  // millis ate quando o access token serve (com margem)
 static bool haveAccess = false;
 static volatile bool visible = false;
+static volatile bool bootTokenDone = false;  // 1a busca do token no boot feita (ok ou nao): libera a 1a rodada de uso
 static volatile SpotifyCmd pending = SpotifyCmd::None;
 static uint32_t nextPoll = 0;
 static TaskHandle_t spotTask = nullptr;
@@ -117,6 +118,7 @@ static void nvsPut(const char *k, const String &v) {
 
 void spotify_begin() {
   accessTok.reserve(512);  // capacidade fixa antes da reserva de heap: o token nao se move durante a TLS
+  coverUrl.reserve(128);   // evita alocar a URL da capa dentro dos blocos da reserva TLS
   coverBuf = (uint16_t *)heap_caps_malloc(SPOTIFY_COVER_PX * SPOTIFY_COVER_PX * 2, MALLOC_CAP_8BIT);
   Preferences p;
   p.begin(NVS_NS, true);
@@ -218,6 +220,8 @@ static bool ensureAccess() {
   rq.http10 = true;
   rq.headers = "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: painel-cyd/0.1\r\n";
   rq.body = "grant_type=refresh_token&client_id=" + cid + "&refresh_token=" + urlEncode(rt);
+  cid = String();
+  rt = String();
   bool got = false;
   rq.onBody = [&](Stream &s) {
     for (int i = 0; i < 24 && s.available() && s.peek() != '{'; i++) s.read();
@@ -320,8 +324,8 @@ static void fetchCover(const String &url) {
 
   // O buffer de download so existe durante a TLS desta capa (alocado no onBody, depois do handshake, e
   // liberado logo apos o decode): 8 KB permanentes tiravam heap das TLS dos outros servicos.
-  uint8_t *data = nullptr;
   size_t len = 0;
+  bool ok = false;
   HttpsHeader want[] = {{"content-length"}};
   HttpsRequest rq;
   rq.host = host.c_str();
@@ -334,28 +338,27 @@ static void fetchCover(const String &url) {
   rq.onBody = [&](Stream &s) {
     size_t expect = want[0].value.toInt();
     if (expect == 0 || expect > COVER_MAX_BYTES) expect = COVER_MAX_BYTES;
-    data = (uint8_t *)heap_caps_malloc(expect, MALLOC_CAP_8BIT);
+    uint8_t *data = (uint8_t *)heap_caps_malloc(expect, MALLOC_CAP_8BIT);
     if (!data) {
       board_log("[spotify] capa: sem memoria para %u bytes", (unsigned)expect);
       return;
     }
     len = s.readBytes(data, expect);
+    if (len > 100 && data[0] == 0xFF && data[1] == 0xD8) {
+      TJpgDec.setJpgScale(1);
+      TJpgDec.setSwapBytes(true);  // ordem de bytes do LVGL com LV_COLOR_16_SWAP
+      TJpgDec.setCallback(jpgOut);
+      Guard g;
+      ok = TJpgDec.drawJpg(0, 0, data, len) == 0;
+      if (ok) {
+        coverValid = true;
+        st.cover_seq++;
+      }
+    }
+    free(data);  // libera antes do https_unlock refazer os dois blocos de reserva TLS
   };
   HttpsResult rs;
   https_send(rq, rs);
-  bool ok = false;
-  if (rs.status == 200 && data && len > 100 && data[0] == 0xFF && data[1] == 0xD8) {
-    TJpgDec.setJpgScale(1);
-    TJpgDec.setSwapBytes(true);  // ordem de bytes do LVGL com LV_COLOR_16_SWAP
-    TJpgDec.setCallback(jpgOut);
-    Guard g;
-    ok = TJpgDec.drawJpg(0, 0, data, len) == 0;
-    if (ok) {
-      coverValid = true;
-      st.cover_seq++;
-    }
-  }
-  free(data);
   board_log("[spotify] capa: HTTP %d, %u bytes, %s | heap %u, bloco %u", rs.status, (unsigned)len,
             ok ? "ok" : "falhou", ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 }
@@ -364,7 +367,7 @@ static void fetchCover(const String &url) {
 
 static void poll() {
   HttpsHeader want[] = {{"retry-after"}};
-  String newCover;
+  char newCover[128] = "";
   struct {
     bool is_playing = false;
     uint32_t progress = 0, duration = 0;
@@ -405,7 +408,7 @@ static void poll() {
       int w = im["width"] | 100000;
       if (w < best) {
         best = w;
-        newCover = (const char *)(im["url"] | "");
+        strlcpy(newCover, im["url"] | "", sizeof(newCover));
       }
     }
     parsed = true;
@@ -450,10 +453,15 @@ static void poll() {
   nextPoll = millis() + wait;
 
   // Comando pendente: a capa fica para a proxima poll (coverUrl intacta) e o comando sai antes.
-  if (rs.status == 200 && parsed && !newCover.isEmpty() && newCover != coverUrl && pending == SpotifyCmd::None) {
+  if (rs.status == 200 && parsed && newCover[0] && coverUrl != newCover && pending == SpotifyCmd::None) {
     coverUrl = newCover;
-    fetchCover(newCover);
+    fetchCover(coverUrl);
   }
+}
+
+bool spotify_boot_done() {
+  Guard g;
+  return bootTokenDone || !st.linked;
 }
 
 void spotify_step() {
@@ -461,6 +469,10 @@ void spotify_step() {
   {
     Guard g;
     if (!st.linked) return;
+  }
+  if (!bootTokenDone) {  // so uma vez, mesmo com a pagina oculta: pega o buraco de heap ainda inteiro
+    ensureAccess();
+    bootTokenDone = true;
   }
   if (afterCmd && millis() - afterCmdMs > AFTER_CMD_MAX_MS) {
     afterCmd = false;

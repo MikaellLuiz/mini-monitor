@@ -17,14 +17,22 @@ void board_log(const char *fmt, ...) {
   char buf[160];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, ap);
+  int n = vsnprintf(buf, sizeof(buf) - 2, fmt, ap);
   va_end(ap);
-  Serial.println(buf);
+  if (n < 0) return;
+  if (n > (int)sizeof(buf) - 3) n = sizeof(buf) - 3;
+  buf[n++] = '\r';
+  buf[n++] = '\n';
+  Serial.write((const uint8_t *)buf, n);
 }
 
 void board_set_brightness(uint8_t v) { tft.setBrightness(v); }
 uint8_t board_get_brightness(void) { return tft.getBrightness(); }
-void board_restart(void) { ESP.restart(); }
+void board_restart(void) {
+  Serial.flush();
+  delay(50);
+  ESP.restart();
+}
 
 void board_fatal(const char *msg) {
   Serial.printf("\n*** FATAL: %s - reiniciando\n", msg);
