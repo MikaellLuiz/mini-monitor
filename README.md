@@ -131,9 +131,3 @@ Para desenvolvedores e detalhes de implementação interna:
 * **Framework**: Arduino-ESP32 + LVGL 8.3 + LovyanGFX.
 * **Alocação e Memória TLS**: A placa opera no limite de RAM (~95 KB livres). O firmware utiliza uma reserva dedicada de buffers gerenciada direto via `mbedtls_platform_set_calloc_free` para garantir conexões HTTPS seguras sem fragmentação do heap.
 * Consulte a documentação interna em [`docs/Índice.md`](docs/Índice.md) e [`docs/Contexto atual.md`](docs/Contexto%20atual.md).
-
----
-
-## 📜 Licença
-
-Distribuído sob a licença MIT. Sinta-se à vontade para construir o seu, modificar e contribuir!
