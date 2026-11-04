@@ -1,3 +1,4 @@
+.venv
 .venv/
 .pio/
 .sim_build/
