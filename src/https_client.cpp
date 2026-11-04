@@ -27,12 +27,15 @@ static constexpr int RESERVE_N = 2;
 // Pula a TLS quando falta bloco na reserva e nem 16 KB contiguos existem no heap geral.
 static constexpr uint32_t TLS_MIN_BLOCK = 16 * 1024;
 static constexpr uint32_t TLS_MIN_BLOCK_WITH_RESERVE = 4 * 1024;
-// Piso de heap livre ao iniciar a TLS = max(base, pico_aprendido(host) + folga). A rede travou duas vezes quando
-// sobraram ~11 KB apos o handshake; 14 KB de folga para o Wi-Fi receber pacotes. Base: 50 KB (handshake completo)
-// ou 46 KB (retomada). O pico e o maior consumo medido do host ("a TLS pegou"); 0 enquanto nao houver medida.
-static constexpr uint32_t TLS_MIN_FREE = 50 * 1024;
-static constexpr uint32_t TLS_MIN_FREE_RESUME = 46 * 1024;
-static constexpr uint32_t TLS_FREE_MARGIN = 14 * 1024;
+// Piso de heap livre ao iniciar a TLS = max(base, min(pico_aprendido(host) + folga, teto)).
+// Com a reserva de 2 blocos entregue direto ao mbedtls_calloc, os ~34,8 KB dos buffers de I/O ja
+// estao garantidos fora da disputa do heap geral. A folga precisa cobrir apenas pacotes TCP/Wi-Fi
+// (~8 KB) e o pico aprendido nao deve ultrapassar o teto maximo seguro (51 KB) para nao travar
+// consultas quando o heap em repouso estiver em ~54-55 KB.
+static constexpr uint32_t TLS_MIN_FREE = 48 * 1024;
+static constexpr uint32_t TLS_MIN_FREE_RESUME = 44 * 1024;
+static constexpr uint32_t TLS_FREE_MARGIN = 8 * 1024;
+static constexpr uint32_t TLS_MAX_FLOOR = 51 * 1024;
 static constexpr uint32_t REALLOC_MIN_FREE = 24 * 1024;  // so reserva se sobrar isso depois
 static constexpr uint32_t VALVE_MIN_FREE = 16 * 1024;    // abaixo disso a valvula solta o lastro
 // Requisicao em curso (https_send com a trava): instante (millis|1, 0 = nenhuma) e host, lidos por
@@ -358,7 +361,8 @@ class ResumeClient : public WiFiClientSecure {
     uint32_t availRes = ballastPrepare();  // socket e TCP prontos: garante os 2 blocos para o tlsCalloc
     freeRel = heap_caps_get_free_size(MALLOC_CAP_8BIT) + availRes;
     uint32_t floorB = sl && sl->valid ? TLS_MIN_FREE_RESUME : TLS_MIN_FREE;
-    floorB = max(floorB, peakOf(host) + TLS_FREE_MARGIN);
+    uint32_t peakFloor = peakOf(host) ? peakOf(host) + TLS_FREE_MARGIN : 0;
+    floorB = min(max(floorB, peakFloor), TLS_MAX_FLOOR);
     if (freeRel < floorB) {  // mesmo efeito de "sem memoria contigua"
       lowFree = freeRel;
       noContig = true;
