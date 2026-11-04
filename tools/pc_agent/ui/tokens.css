@@ -8,6 +8,7 @@
   --track: #252b34;
   --text: #e8eaed;
   --muted: #9aa0a6;
+  --off-text: #5b636d;
   --tonal: #1f2a3a;
   --on-tonal: #a8c7fa;
   --tonal-pr: #2b3d58;
@@ -20,6 +21,9 @@
   --green: #6dd58c;
   --amber: #f6b26b;
   --red: #f28b82;
+  --ok-bg: #16261e;
+  --warn-bg: #292219;
+  --bad-bg: #281c1c;
   --claude: #d97757;
   --codex: #5fc9b8;
   --agy: #b39dff;
@@ -27,20 +31,20 @@
   --row-pr: #1e242c;
   --fill: #2b3d58;
   --on-fill: #d3e3fd;
-  --dot: #353b44;
+  --dot: #4a515b;
   --dot-on: #c9ced6;
   --handle: #3a4049;
   --sheet: #1a1f26;
-  --sent-bg: #15241a;
+  --sent-bg: #16261e;
   --primary: #a8c7fa;
   --on-primary: #0a2a55;
-  --sp-bg: #000000;
-  --sp-text: #ffffff;
-  --sp-sub: #b3b3b3;
+  --sp-bg: #0a0c0f;
+  --sp-text: #e8eaed;
+  --sp-sub: #9aa0a6;
   --sp-green: #1ed760;
-  --sp-track: #3e3e3e;
-  --sp-cover: #282828;
-  --sp-pr: #222222;
+  --sp-track: #252b34;
+  --sp-cover: #14181e;
+  --sp-pr: #1e242c;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
@@ -52,6 +56,7 @@
   --track: #dde1e6;
   --text: #111418;
   --muted: #5b636d;
+  --off-text: #9aa0a6;
   --tonal: #d8e3f8;
   --on-tonal: #0b57d0;
   --tonal-pr: #c2d3f2;
@@ -64,6 +69,9 @@
   --green: #1e8e3e;
   --amber: #b06000;
   --red: #c5221f;
+  --ok-bg: #ddf2e3;
+  --warn-bg: #f7e8d0;
+  --bad-bg: #fadad7;
   --claude: #b5532f;
   --codex: #0f7d6e;
   --agy: #5b3fc4;
@@ -71,20 +79,20 @@
   --row-pr: #edf0f4;
   --fill: #b9ccf2;
   --on-fill: #0b2a66;
-  --dot: #c4c9d0;
+  --dot: #b7bdc5;
   --dot-on: #2f353c;
   --handle: #b7bdc5;
   --sheet: #ffffff;
   --sent-bg: #ddf2e3;
   --primary: #0b57d0;
   --on-primary: #ffffff;
-  --sp-bg: #ffffff;
-  --sp-text: #111111;
-  --sp-sub: #5e5e5e;
+  --sp-bg: #eef0f3;
+  --sp-text: #111418;
+  --sp-sub: #5b636d;
   --sp-green: #0f7a35;
-  --sp-track: #dadada;
-  --sp-cover: #e3e3e3;
-  --sp-pr: #e6e6e6;
+  --sp-track: #dde1e6;
+  --sp-cover: #ffffff;
+  --sp-pr: #edf0f4;
   }
 }
 :root[data-theme="light"] {
@@ -96,6 +104,7 @@
   --track: #dde1e6;
   --text: #111418;
   --muted: #5b636d;
+  --off-text: #9aa0a6;
   --tonal: #d8e3f8;
   --on-tonal: #0b57d0;
   --tonal-pr: #c2d3f2;
@@ -108,6 +117,9 @@
   --green: #1e8e3e;
   --amber: #b06000;
   --red: #c5221f;
+  --ok-bg: #ddf2e3;
+  --warn-bg: #f7e8d0;
+  --bad-bg: #fadad7;
   --claude: #b5532f;
   --codex: #0f7d6e;
   --agy: #5b3fc4;
@@ -115,18 +127,18 @@
   --row-pr: #edf0f4;
   --fill: #b9ccf2;
   --on-fill: #0b2a66;
-  --dot: #c4c9d0;
+  --dot: #b7bdc5;
   --dot-on: #2f353c;
   --handle: #b7bdc5;
   --sheet: #ffffff;
   --sent-bg: #ddf2e3;
   --primary: #0b57d0;
   --on-primary: #ffffff;
-  --sp-bg: #ffffff;
-  --sp-text: #111111;
-  --sp-sub: #5e5e5e;
+  --sp-bg: #eef0f3;
+  --sp-text: #111418;
+  --sp-sub: #5b636d;
   --sp-green: #0f7a35;
-  --sp-track: #dadada;
-  --sp-cover: #e3e3e3;
-  --sp-pr: #e6e6e6;
+  --sp-track: #dde1e6;
+  --sp-cover: #ffffff;
+  --sp-pr: #edf0f4;
 }

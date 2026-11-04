@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "settings_ui.h"
 #include "theme.h"
 #include "ui.h"
 #include "wifi_mgr.h"
@@ -11,7 +12,6 @@
 static constexpr int SCR_W = 320;
 static constexpr int SCR_H = 240;
 
-static lv_obj_t *statusIcon, *statusClock;
 // As telas cheias (Wi-Fi, portal, redes salvas) so existem enquanto abertas: o pool
 // do LVGL na placa e pequeno e o QR pede ~8 KB temporarios ao ser gerado.
 static lv_obj_t *wifiScreen, *wsCard, *wsIcon, *wsIconLbl, *lblLine1, *lblLine2, *lblSavedCount;
@@ -94,6 +94,7 @@ static void updateWifiScreen(const WifiStatus &s) {
 static void wifiBackCb(lv_event_t *) {
   lv_obj_del_async(wifiScreen);  // async: o botao clicado e filho dela
   wifiScreen = nullptr;
+  settings_ui_child_closed();
 }
 static void addCb(lv_event_t *) { wifi_portal_start(); }
 static void reconnectCb(lv_event_t *) { wifi_connect_now(); }
@@ -134,21 +135,6 @@ void wifi_ui_open() {
   ui_mini_btn(wifiScreen, 10, 204, LV_SYMBOL_REFRESH " Reconectar", reconnectCb);
 
   updateWifiScreen(wifi_status());
-}
-
-// ---- barra de status ---------------------------------------------------------
-
-static void updateStatusBar(const WifiStatus &s) {
-  uint32_t color = th::MUTED;
-  if (s.state == WifiState::Connected) color = th::GREEN;
-  else if (s.state == WifiState::Connecting || s.state == WifiState::Scanning) color = th::AMBER;
-  else if (s.state == WifiState::Portal) color = th::ON_TONAL;
-  lv_obj_set_style_text_color(statusIcon, thc(color), 0);
-
-  // Na pagina Relogio a hora ja esta grande na tela.
-  int h, m;
-  if (!ui_page_shown(PG_CLOCK) && board_local_time(&h, &m)) lv_label_set_text_fmt(statusClock, "%02d:%02d", h, m);
-  else lv_label_set_text(statusClock, "");
 }
 
 // ---- portal ------------------------------------------------------------------
@@ -340,24 +326,10 @@ static void refreshCb(lv_timer_t *) {
   if (ui_is_animating()) return;  // nao competir com os quadros da transicao
   WifiStatus s = wifi_status();
   if (wifiScreen) updateWifiScreen(s);
-  updateStatusBar(s);
   updatePortal(s);
 }
 
 void wifi_ui_init_overlays() {
-  lv_obj_t *bar = lv_obj_create(lv_layer_top());
-  lv_obj_remove_style_all(bar);
-  lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(bar, 90, 18);
-  lv_obj_align(bar, LV_ALIGN_BOTTOM_LEFT, 10, 0);
-  lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(bar, 6, 0);
-  statusIcon = lv_label_create(bar);
-  lv_label_set_text(statusIcon, LV_SYMBOL_WIFI);
-  lv_obj_set_style_text_font(statusIcon, &lv_font_montserrat_12, 0);
-  statusClock = ui_muted(bar, "");
-
   lv_timer_create(refreshCb, 500, nullptr);
   refreshCb(nullptr);
 }

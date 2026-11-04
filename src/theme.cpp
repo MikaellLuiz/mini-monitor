@@ -1,5 +1,7 @@
 #include "theme.h"
 
+#include <stdio.h>
+
 #include "board.h"
 
 namespace th {
@@ -8,17 +10,128 @@ TH_TOKENS(X)
 #undef X
 }  // namespace th
 
-static const char *NVS_THEME = "theme";  // 1 = claro
+static const char *NVS_THEME = "theme";      // 1 = claro
+static const char *NVS_PALETTE = "palette";  // PaletteId (0..3)
 static bool lightTheme = false;
+static PaletteId curPalette = PAL_GRAFITE;
+
+static const char *const PAL_NAMES[PAL_COUNT] = {"Grafite", "Claude Code", "Terminal", "Noite"};
+
+bool theme_palette_has_light(PaletteId p) { return p == PAL_GRAFITE || p == PAL_CLAUDE; }
+const char *theme_palette_name(PaletteId p) { return p < PAL_COUNT ? PAL_NAMES[p] : PAL_NAMES[0]; }
+
+PaletteId theme_palette() {
+  uint8_t p = settings_get_u8(NVS_PALETTE, PAL_GRAFITE);
+  return p < PAL_COUNT ? (PaletteId)p : PAL_GRAFITE;
+}
+
+void theme_set_palette(PaletteId p) {
+  if (p >= PAL_COUNT) p = PAL_GRAFITE;
+  settings_set_u8(NVS_PALETTE, (uint8_t)p);
+  if (!theme_palette_has_light(p)) settings_set_u8(NVS_THEME, 0);
+}
 
 bool theme_is_light() { return lightTheme; }
-void theme_set_light(bool light) { settings_set_u8(NVS_THEME, light ? 1 : 0); }
+void theme_set_light(bool light) {
+  if (light && !theme_palette_has_light(theme_palette())) {
+    settings_set_u8(NVS_PALETTE, PAL_GRAFITE);
+  }
+  settings_set_u8(NVS_THEME, light ? 1 : 0);
+}
+
+void theme_summary(char *buf, int size) {
+  PaletteId p = theme_palette();
+  snprintf(buf, size, "%s - %s", theme_palette_name(p), theme_is_light() ? "Claro" : "Escuro");
+}
+
+ThemeSwatch theme_swatch(PaletteId p, bool light) {
+  if (!theme_palette_has_light(p)) light = false;
+  switch (p) {
+    case PAL_CLAUDE:
+      return light ? ThemeSwatch{0xF5F4EE, 0xFFFFFF, 0xB5532F} : ThemeSwatch{0x1C1B19, 0x272622, 0xD97757};
+    case PAL_TERMINAL:
+      return ThemeSwatch{0x050805, 0x0D140F, 0x63E085};
+    case PAL_NOITE:
+      return ThemeSwatch{0x000000, 0x12100E, 0xB88464};
+    default:
+      return light ? ThemeSwatch{0xEEF0F3, 0xFFFFFF, 0x0B57D0} : ThemeSwatch{0x0A0C0F, 0x14181E, 0x8AB4F8};
+  }
+}
 
 uint32_t theme_accent(int idx) {
   static const uint32_t DARK[4] = {0x8AB4F8, 0xD97757, 0x6DD58C, 0x9AA0A6};
   static const uint32_t LIGHT[4] = {0x0B57D0, 0xB5532F, 0x1E8E3E, 0x5B636D};
   if (idx < 0 || idx > 3) idx = 0;
+  if (curPalette == PAL_TERMINAL && idx == 0) return 0x63E085;
+  if (curPalette == PAL_NOITE && idx == 0) return 0xB88464;
   return lightTheme ? LIGHT[idx] : DARK[idx];
+}
+
+static void applyPalette(PaletteId p, bool light) {
+#define X(name, d, l) th::name = light ? l : d;
+  TH_TOKENS(X)
+#undef X
+  if (p == PAL_CLAUDE) {
+    if (!light) {
+      th::BG = 0x1C1B19; th::CARD = 0x272622; th::CARD_HI = 0x332920; th::LINE = 0x35332E; th::TRACK = 0x3A3832;
+      th::TEXT = 0xECE9E0; th::MUTED = 0xA6A196; th::OFF_TEXT = 0x6B675E;
+      th::TONAL = 0x362820; th::ON_TONAL = 0xE89A7E; th::TONAL_PR = 0x473328;
+      th::MINI = 0x2D2B27; th::ON_MINI = 0xD6D2C7; th::MINI_PR = 0x3A3832;
+      th::GREEN = 0x7CC98E; th::OK_BG = 0x283228;
+      th::AMBER = 0xEBB165; th::WARN_BG = 0x372E22;
+      th::RED = 0xE8897E; th::BAD_BG = 0x362926;
+      th::ACCENT = 0xD97757; th::ROW_PR = 0x312F2A;
+      th::FILL = 0x473328; th::ON_FILL = 0xF3C5B2;
+      th::DOT = 0x57544C; th::DOT_ON = 0xD8D4C8; th::HANDLE = 0x4C4942;
+      th::SHEET = 0x272622; th::SENT_BG = 0x283228;
+      th::PRIMARY = 0xE89A7E; th::ON_PRIMARY = 0x2E150B;
+    } else {
+      th::BG = 0xF5F4EE; th::CARD = 0xFFFFFF; th::CARD_HI = 0xF7E6DD; th::LINE = 0xE5E3DA; th::TRACK = 0xE2DFD5;
+      th::TEXT = 0x1D1B18; th::MUTED = 0x6B675E; th::OFF_TEXT = 0xA6A196;
+      th::TONAL = 0xF5E1D6; th::ON_TONAL = 0xB5532F; th::TONAL_PR = 0xEBD0C1;
+      th::MINI = 0xE6E3DA; th::ON_MINI = 0x3A3731; th::MINI_PR = 0xD8D4C9;
+      th::GREEN = 0x257A3E; th::OK_BG = 0xE2F0E4;
+      th::AMBER = 0xA85C00; th::WARN_BG = 0xF7E8D2;
+      th::RED = 0xB8291F; th::BAD_BG = 0xF9DDD9;
+      th::ACCENT = 0xB5532F; th::ROW_PR = 0xEFECE3;
+      th::FILL = 0xECCBB9; th::ON_FILL = 0x5E2410;
+      th::DOT = 0xC7C3B8; th::DOT_ON = 0x3A3731; th::HANDLE = 0xC4C0B5;
+      th::SHEET = 0xFFFFFF; th::SENT_BG = 0xE2F0E4;
+      th::PRIMARY = 0xB5532F; th::ON_PRIMARY = 0xFFFFFF;
+    }
+  } else if (p == PAL_TERMINAL) {
+    th::BG = 0x050805; th::CARD = 0x0D140F; th::CARD_HI = 0x142619; th::LINE = 0x1B2B1F; th::TRACK = 0x19281D;
+    th::TEXT = 0xD4F2D9; th::MUTED = 0x76A37E; th::OFF_TEXT = 0x4A6B50;
+    th::TONAL = 0x132618; th::ON_TONAL = 0x7CE89A; th::TONAL_PR = 0x1C3824;
+    th::MINI = 0x101A13; th::ON_MINI = 0xA8D4B1; th::MINI_PR = 0x19281D;
+    th::GREEN = 0x63E085; th::OK_BG = 0x112314;
+    th::AMBER = 0xE6C15A; th::WARN_BG = 0x222010;
+    th::RED = 0xE87A74; th::BAD_BG = 0x221713;
+    th::CLAUDE = 0x63E085; th::CODEX = 0x5FD4B8; th::AGY = 0x9BE8A8; th::ACCENT = 0x63E085;
+    th::ROW_PR = 0x152319; th::FILL = 0x1C3824; th::ON_FILL = 0xB5F2C4;
+    th::DOT = 0x33523B; th::DOT_ON = 0x9AD1A5; th::HANDLE = 0x2C4733;
+    th::SHEET = 0x0D140F; th::SENT_BG = 0x112314;
+    th::PRIMARY = 0x63E085; th::ON_PRIMARY = 0x051A0B;
+  } else if (p == PAL_NOITE) {
+    th::BG = 0x000000; th::CARD = 0x12100E; th::CARD_HI = 0x1E1814; th::LINE = 0x24201C; th::TRACK = 0x26221E;
+    th::TEXT = 0xCFC8BE; th::MUTED = 0x7D776E; th::OFF_TEXT = 0x524D47;
+    th::TONAL = 0x211914; th::ON_TONAL = 0xC98766; th::TONAL_PR = 0x30231B;
+    th::MINI = 0x171512; th::ON_MINI = 0xABA49A; th::MINI_PR = 0x24201C;
+    th::GREEN = 0x6BA87A; th::OK_BG = 0x0E1610;
+    th::AMBER = 0xC99555; th::WARN_BG = 0x1A130B;
+    th::RED = 0xC77067; th::BAD_BG = 0x1A0F0D;
+    th::CLAUDE = 0xBA684C; th::CODEX = 0x52A395; th::AGY = 0x917FD1; th::ACCENT = 0xB88464;
+    th::ROW_PR = 0x1A1714; th::FILL = 0x30231B; th::ON_FILL = 0xDEC0B0;
+    th::DOT = 0x423E38; th::DOT_ON = 0x9E978D; th::HANDLE = 0x36322D;
+    th::SHEET = 0x12100E; th::SENT_BG = 0x0E1610;
+    th::PRIMARY = 0xC98766; th::ON_PRIMARY = 0x1A0E07;
+  }
+  th::SP_BG = th::BG;
+  th::SP_TEXT = th::TEXT;
+  th::SP_SUB = th::MUTED;
+  th::SP_TRACK = th::TRACK;
+  th::SP_COVER = th::CARD;
+  th::SP_PR = th::ROW_PR;
 }
 
 // ---- estilos compartilhados ---------------------------------------------------
@@ -123,10 +236,9 @@ static void initStyles() {
 }
 
 void theme_init() {
-  lightTheme = settings_get_u8(NVS_THEME, 0) != 0;
-#define X(name, dark, light) th::name = lightTheme ? light : dark;
-  TH_TOKENS(X)
-#undef X
+  curPalette = theme_palette();
+  lightTheme = theme_palette_has_light(curPalette) && (settings_get_u8(NVS_THEME, 0) != 0);
+  applyPalette(curPalette, lightTheme);
   lv_theme_default_init(lv_disp_get_default(), thc(th::ACCENT), thc(th::CODEX), !lightTheme, &lv_font_montserrat_14);
   lv_obj_set_style_bg_color(lv_scr_act(), thc(th::BG), 0);
   lv_obj_set_style_text_color(lv_scr_act(), thc(th::TEXT), 0);
@@ -281,7 +393,7 @@ UiRow ui_list_row(lv_obj_t *list, const char *icon, const char *title, const cha
     lv_obj_align(r.title, LV_ALIGN_LEFT_MID, x, -8);
     r.sub = ui_muted(r.row, sub);
     lv_label_set_long_mode(r.sub, LV_LABEL_LONG_DOT);
-    lv_obj_set_size(r.sub, 200, 15);
+    lv_obj_set_size(r.sub, icon ? 228 : 258, 15);
     lv_obj_align(r.sub, LV_ALIGN_LEFT_MID, x, 9);
   } else {
     lv_obj_align(r.title, LV_ALIGN_LEFT_MID, x, 0);

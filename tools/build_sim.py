@@ -15,9 +15,13 @@ LVGL = os.path.join(ROOT, ".pio", "libdeps", "cyd", "lvgl")
 # --m32: compila em 32 bits (ponteiros de 4 bytes, como o ESP32) para medir o uso real do
 # pool do LVGL com o comando "mem" dos roteiros. Objetos e exe ficam em .sim_build32/.
 M32 = "--m32" in sys.argv
+IS_WIN = os.name == "nt"
 BUILD = os.path.join(ROOT, ".sim_build32" if M32 else ".sim_build")
-EXE = os.path.join(BUILD, "sim.exe")
-TARGET = ["-target", "x86-windows-gnu"] if M32 else []
+EXE = os.path.join(BUILD, "sim.exe" if IS_WIN else "sim")
+if IS_WIN:
+    TARGET = ["-target", "x86-windows-gnu"] if M32 else []
+else:
+    TARGET = ["-m32"] if M32 else []
 
 # So os arquivos de interface portaveis: o resto de src/ e codigo da placa.
 UI_SOURCES = ["src/ui.cpp", "src/quickpanel.cpp", "src/wifi_ui.cpp", "src/diag_ui.cpp",
@@ -27,7 +31,7 @@ SIM_SOURCES = glob.glob(os.path.join(ROOT, "sim", "*.cpp"))
 
 INCLUDES = ["-I" + os.path.join(ROOT, d) for d in ("include", "src", "sim")] + ["-I" + LVGL]
 DEFINES = ["-DLV_CONF_INCLUDE_SIMPLE"]
-ZIG = [sys.executable, "-m", "ziglang"]
+ZIG = [sys.executable, "-m", "ziglang"] if IS_WIN else None
 
 
 def obj_path(src):
@@ -42,7 +46,11 @@ def needs_build(src, obj, deps_mtime):
 def compile_one(src):
     obj = obj_path(src)
     is_cpp = src.endswith(".cpp")
-    cmd = ZIG + ["c++" if is_cpp else "cc"] + TARGET + ["-c", src, "-o", obj, "-O2", "-g0"]
+    if ZIG:
+        cc = ZIG + ["c++" if is_cpp else "cc"]
+    else:
+        cc = ["g++" if is_cpp else "gcc"]
+    cmd = cc + TARGET + ["-c", src, "-o", obj, "-O2", "-g0"]
     cmd += ["-std=c++17"] if is_cpp else ["-std=gnu99", "-w"]
     cmd += INCLUDES + DEFINES
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -78,7 +86,10 @@ def main():
         sys.exit(1)
 
     objs = [obj_path(s) for s in lvgl_sources + app_sources]
-    link = ZIG + ["c++"] + TARGET + ["-o", EXE] + objs + ["-lgdi32", "-luser32"]
+    if ZIG:
+        link = ZIG + ["c++"] + TARGET + ["-o", EXE] + objs + ["-lgdi32", "-luser32"]
+    else:
+        link = ["g++"] + TARGET + ["-o", EXE] + objs
     r = subprocess.run(link, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit("ERRO no link:\n" + r.stderr)

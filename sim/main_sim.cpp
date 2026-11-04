@@ -12,8 +12,13 @@
 // O que o simulador NAO reproduz: velocidade do ESP32, SPI, tearing e a
 // sensacao do toque resistivo. FPS/CPU so valem medidos na placa.
 
+#ifdef _WIN32
 #include <windows.h>
 #include <windowsx.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +50,9 @@ static struct {
   bool pressed = false;
 } pointer;
 
+#ifdef _WIN32
 static HWND hwnd;
+#endif
 static std::string outDir = "sim_shots";
 
 static void flushCb(lv_disp_drv_t *drv, const lv_area_t *a, lv_color_t *px) {
@@ -76,7 +83,11 @@ static bool saveShot(const std::string &name) {
       uint8_t *p = &rgb[((size_t)y * W * SCALE + x) * 3];
       p[0] = c >> 16; p[1] = c >> 8; p[2] = c;
     }
+#ifdef _WIN32
   CreateDirectoryA(outDir.c_str(), nullptr);
+#else
+  mkdir(outDir.c_str(), 0755);
+#endif
   std::string path = outDir + "/" + name;
   bool ok = png_write(path.c_str(), W * SCALE, H * SCALE, rgb.data());
   board_log("[sim] screenshot %s %s", path.c_str(), ok ? "ok" : "FALHOU");
@@ -170,6 +181,7 @@ static int runScript(const char *path) {
 
 // ---- modo janela ------------------------------------------------------------
 
+#ifdef _WIN32
 static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
   switch (msg) {
     case WM_LBUTTONDOWN:
@@ -250,6 +262,12 @@ static int runWindow() {
     Sleep(5);
   }
 }
+#else
+static int runWindow() {
+  board_log("[sim] modo janela disponivel apenas no Windows; use --script no Linux.");
+  return 1;
+}
+#endif
 
 int main(int argc, char **argv) {
   const char *script = nullptr;

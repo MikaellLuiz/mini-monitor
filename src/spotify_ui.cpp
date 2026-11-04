@@ -14,7 +14,7 @@ static constexpr int SCR_W = 320;
 static constexpr int SCR_H = 240;
 static constexpr int COVER_SHOWN = 96;  // a capa vem em 64 px e e ampliada 1,5x
 
-static lv_obj_t *cover, *coverBox, *lblTitle, *lblArtist, *lblInfo, *bar, *lblPos, *lblDur;
+static lv_obj_t *cover, *coverBox, *infoDot, *lblTitle, *lblArtist, *lblInfo, *bar, *lblPos, *lblDur;
 static lv_obj_t *btnPlay, *btnPlayLbl, *content, *setup;
 static lv_img_dsc_t coverDsc;
 static uint16_t shownSeq = 0xFFFF;
@@ -92,13 +92,25 @@ static void refreshCb(lv_timer_t *) {
   bool playing = s.playing && s.active && fresh;
 
   char info[96];
-  if (s.error[0]) snprintf(info, sizeof(info), "%s", s.error);
-  else if (s.active && !fresh) snprintf(info, sizeof(info), "ATUALIZANDO...");
-  else if ((int32_t)(board_millis() - refreshingUntil) < 0) snprintf(info, sizeof(info), "ATUALIZANDO...");
-  else if (s.active) snprintf(info, sizeof(info), LV_SYMBOL_WIFI "  %s EM %s", s.playing ? "TOCANDO" : "PAUSADO", s.device);
-  else snprintf(info, sizeof(info), "SPOTIFY");
+  uint32_t infoCol = th::SP_GREEN;
+  if (s.error[0]) {
+    snprintf(info, sizeof(info), "%s", s.error);
+    infoCol = th::RED;
+  } else if (s.active && !fresh) {
+    snprintf(info, sizeof(info), "ATUALIZANDO...");
+    infoCol = th::MUTED;
+  } else if ((int32_t)(board_millis() - refreshingUntil) < 0) {
+    snprintf(info, sizeof(info), "ATUALIZANDO...");
+    infoCol = th::MUTED;
+  } else if (s.active) {
+    snprintf(info, sizeof(info), "%s EM %s", s.playing ? "TOCANDO" : "PAUSADO", s.device);
+  } else {
+    snprintf(info, sizeof(info), "SPOTIFY");
+    infoCol = th::MUTED;
+  }
   setText(lblInfo, shownInfo, sizeof(shownInfo), info);
-  lv_obj_set_style_text_color(lblInfo, thc(s.error[0] ? th::RED : (s.active && !fresh) ? th::SP_SUB : th::SP_GREEN), 0);
+  lv_obj_set_style_text_color(lblInfo, thc(infoCol), 0);
+  if (infoDot) lv_obj_set_style_bg_color(infoDot, thc(infoCol), 0);
 
   if (playing != shownPlaying) {
     shownPlaying = playing;
@@ -129,20 +141,20 @@ static void refreshCb(lv_timer_t *) {
 static void cmdCb(lv_event_t *e) { spotify_command((SpotifyCmd)(intptr_t)lv_event_get_user_data(e)); }
 
 // Anterior/proxima: so o icone, sem fundo (estilo do player do carro).
-static lv_obj_t *makeCtl(lv_obj_t *parent, int x, int y, int size, const char *symbol, SpotifyCmd cmd, bool round) {
+static lv_obj_t *makeCtl(lv_obj_t *parent, int x, int y, int size, const char *symbol, SpotifyCmd cmd, bool primary) {
   lv_obj_t *b = lv_btn_create(parent);
   lv_obj_remove_style_all(b);
   lv_obj_set_size(b, size, size);
   lv_obj_set_pos(b, x, y);
   lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(b, thc(round ? th::SP_TEXT : th::SP_BG), 0);
-  lv_obj_set_style_bg_color(b, thc(round ? th::SP_SUB : th::SP_PR), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(b, thc(primary ? th::SP_GREEN : th::CARD), 0);
+  lv_obj_set_style_bg_color(b, thc(primary ? th::GREEN : th::ROW_PR), LV_STATE_PRESSED);
   lv_obj_set_ext_click_area(b, 6);
   lv_obj_t *l = lv_label_create(b);
   lv_label_set_text(l, symbol);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_28, 0);
-  lv_obj_set_style_text_color(l, thc(round ? th::SP_BG : th::SP_TEXT), 0);
+  lv_obj_set_style_text_font(l, primary ? &lv_font_montserrat_20 : &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(l, thc(primary ? (theme_is_light() ? 0xFFFFFF : 0x0A0C0F) : th::TEXT), 0);
   lv_obj_center(l);
   lv_obj_add_event_cb(b, cmdCb, LV_EVENT_CLICKED, (void *)(intptr_t)cmd);
   return l;
@@ -156,7 +168,7 @@ void spotify_ui_unbuild_page() {
   pageTimer = nullptr;
   spotify_set_visible(false);  // sem timer ninguem mais desliga a consulta do player
   dwelling = false;
-  cover = coverBox = lblTitle = lblArtist = lblInfo = bar = lblPos = lblDur = nullptr;
+  cover = coverBox = infoDot = lblTitle = lblArtist = lblInfo = bar = lblPos = lblDur = nullptr;
   btnPlay = btnPlayLbl = content = setup = nullptr;
   shownSeq = 0xFFFF;
   shownTitle[0] = shownArtist[0] = shownInfo[0] = 0;
@@ -179,7 +191,7 @@ static void trackTapCb(lv_event_t *) {
 }
 
 void spotify_ui_build_page(lv_obj_t *tile) {
-  lv_obj_set_style_bg_color(tile, thc(th::SP_BG), 0);
+  lv_obj_set_style_bg_color(tile, thc(th::BG), 0);
   lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
 
   // Conteudo do player (escondido enquanto nao ha conta).
@@ -189,30 +201,31 @@ void spotify_ui_build_page(lv_obj_t *tile) {
   lv_obj_set_pos(content, 0, 0);
   lv_obj_clear_flag(content, LV_OBJ_FLAG_CLICKABLE);
 
+  infoDot = ui_dot(content, 7, th::SP_GREEN);
+  lv_obj_set_pos(infoDot, 12, 16);
+
   lblInfo = lv_label_create(content);
   lv_label_set_long_mode(lblInfo, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(lblInfo, 250, 16);
+  lv_obj_set_size(lblInfo, 280, 16);
   lv_obj_set_style_text_font(lblInfo, &lv_font_montserrat_12, 0);
-  lv_obj_set_pos(lblInfo, 12, 14);
+  lv_obj_set_pos(lblInfo, 25, 12);
   lv_label_set_text(lblInfo, "");
 
   coverBox = lv_obj_create(content);
   lv_obj_remove_style_all(coverBox);
   lv_obj_set_size(coverBox, COVER_SHOWN, COVER_SHOWN);
-  lv_obj_set_pos(coverBox, 12, 40);
+  lv_obj_set_pos(coverBox, 12, 38);
   lv_obj_clear_flag(coverBox, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_color(coverBox, thc(th::SP_COVER), 0);
+  lv_obj_set_style_bg_color(coverBox, thc(th::CARD), 0);
   lv_obj_set_style_bg_opa(coverBox, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(coverBox, 6, 0);
+  lv_obj_set_style_radius(coverBox, 8, 0);
   lv_obj_t *note = lv_label_create(coverBox);
   lv_label_set_text(note, LV_SYMBOL_AUDIO);
   lv_obj_set_style_text_font(note, &lv_font_montserrat_28, 0);
-  lv_obj_set_style_text_color(note, thc(th::SP_SUB), 0);
+  lv_obj_set_style_text_color(note, thc(th::MUTED), 0);
   lv_obj_center(note);
-  // Ampliada pelo centro (o pivo volta ao centro a cada lv_img_set_src): o objeto
-  // de 64 px fica no meio da caixa e a imagem cresce 16 px para cada lado.
   cover = lv_img_create(content);
-  lv_obj_set_pos(cover, 12 + (COVER_SHOWN - SPOTIFY_COVER_PX) / 2, 40 + (COVER_SHOWN - SPOTIFY_COVER_PX) / 2);
+  lv_obj_set_pos(cover, 12 + (COVER_SHOWN - SPOTIFY_COVER_PX) / 2, 38 + (COVER_SHOWN - SPOTIFY_COVER_PX) / 2);
   lv_img_set_zoom(cover, 256 * COVER_SHOWN / SPOTIFY_COVER_PX);
   lv_img_set_antialias(cover, false);
   lv_obj_add_flag(cover, LV_OBJ_FLAG_HIDDEN);
@@ -226,43 +239,43 @@ void spotify_ui_build_page(lv_obj_t *tile) {
 
   lblTitle = lv_label_create(content);
   lv_label_set_long_mode(lblTitle, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(lblTitle, 184, 26);  // altura fixa: sem ela o modo DOT quebra em varias linhas
+  lv_obj_set_size(lblTitle, 188, 26);
   lv_obj_set_style_text_font(lblTitle, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(lblTitle, thc(th::SP_TEXT), 0);
-  lv_obj_set_pos(lblTitle, 124, 46);
+  lv_obj_set_style_text_color(lblTitle, thc(th::TEXT), 0);
+  lv_obj_set_pos(lblTitle, 120, 40);
   lv_label_set_text(lblTitle, "");
 
   lblArtist = lv_label_create(content);
   lv_label_set_long_mode(lblArtist, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(lblArtist, 184, 18);
-  lv_obj_set_style_text_color(lblArtist, thc(th::SP_SUB), 0);
-  lv_obj_set_pos(lblArtist, 124, 74);
+  lv_obj_set_size(lblArtist, 188, 18);
+  lv_obj_set_style_text_color(lblArtist, thc(th::MUTED), 0);
+  lv_obj_set_pos(lblArtist, 120, 68);
   lv_label_set_text(lblArtist, "");
 
   bar = lv_bar_create(content);
   lv_bar_set_range(bar, 0, 1000);
-  lv_obj_set_size(bar, 184, 4);
-  lv_obj_set_pos(bar, 124, 112);
-  lv_obj_set_style_bg_color(bar, thc(th::SP_TRACK), 0);
+  lv_obj_set_size(bar, 188, 5);
+  lv_obj_set_pos(bar, 120, 108);
+  lv_obj_set_style_bg_color(bar, thc(th::TRACK), 0);
   lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(bar, thc(th::SP_TEXT), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(bar, thc(th::SP_GREEN), LV_PART_INDICATOR);
   lblPos = lv_label_create(content);
   lv_obj_set_style_text_font(lblPos, &lv_font_montserrat_12, 0);
-  lv_obj_set_style_text_color(lblPos, thc(th::SP_SUB), 0);
-  lv_obj_set_pos(lblPos, 124, 121);
+  lv_obj_set_style_text_color(lblPos, thc(th::MUTED), 0);
+  lv_obj_set_pos(lblPos, 120, 118);
   lv_label_set_text(lblPos, "");
   lblDur = lv_label_create(content);
   lv_obj_set_style_text_font(lblDur, &lv_font_montserrat_12, 0);
-  lv_obj_set_style_text_color(lblDur, thc(th::SP_SUB), 0);
+  lv_obj_set_style_text_color(lblDur, thc(th::MUTED), 0);
   lv_obj_set_width(lblDur, 60);
   lv_obj_set_style_text_align(lblDur, LV_TEXT_ALIGN_RIGHT, 0);
-  lv_obj_set_pos(lblDur, 248, 121);
+  lv_obj_set_pos(lblDur, 248, 118);
   lv_label_set_text(lblDur, "");
 
-  makeCtl(content, 70, 156, 48, LV_SYMBOL_PREV, SpotifyCmd::Prev, false);
-  btnPlayLbl = makeCtl(content, 134, 150, 52, LV_SYMBOL_PLAY, SpotifyCmd::PlayPause, true);
+  makeCtl(content, 76, 156, 44, LV_SYMBOL_PREV, SpotifyCmd::Prev, false);
+  btnPlayLbl = makeCtl(content, 134, 152, 52, LV_SYMBOL_PLAY, SpotifyCmd::PlayPause, true);
   btnPlay = lv_obj_get_parent(btnPlayLbl);
-  makeCtl(content, 202, 156, 48, LV_SYMBOL_NEXT, SpotifyCmd::Next, false);
+  makeCtl(content, 200, 156, 44, LV_SYMBOL_NEXT, SpotifyCmd::Next, false);
 
   // Sem conta: orienta a configurar.
   setup = lv_obj_create(tile);
@@ -275,15 +288,12 @@ void spotify_ui_build_page(lv_obj_t *tile) {
   lv_obj_t *msg = lv_label_create(setup);
   lv_label_set_text(msg, "Sem conta ligada");
   lv_obj_set_style_text_font(msg, &lv_font_montserrat_16, 0);
-  lv_obj_set_style_text_color(msg, thc(th::SP_TEXT), 0);
+  lv_obj_set_style_text_color(msg, thc(th::TEXT), 0);
   lv_obj_set_pos(msg, 12, 64);
   lv_obj_t *hint = ui_muted(setup, "O painel controla o Spotify que ja toca\nno PC ou no celular.");
   lv_obj_set_pos(hint, 12, 90);
-  ui_tonal_btn(setup, 12, 132, 0, LV_SYMBOL_SETTINGS " Configurar conta", setupCb);
+  ui_tonal_btn(setup, 12, 136, 0, LV_SYMBOL_SETTINGS " Configurar conta", setupCb);
   lv_obj_add_flag(setup, LV_OBJ_FLAG_HIDDEN);
-
-  // Engrenagem no canto de baixo a direita, na pagina (fica com ou sem conta): abre a conta.
-  ui_gear_btn(tile, setupCb);
 
   shownLinked = true;
   pageTimer = lv_timer_create(refreshCb, 500, nullptr);

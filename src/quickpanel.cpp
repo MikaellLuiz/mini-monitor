@@ -65,6 +65,7 @@ static void brightnessCb(lv_event_t *e) {
 // Tema: as telas pegam as cores ao serem montadas, entao trocar reinicia o painel.
 static void themeCb(lv_event_t *e) {
   bool light = lv_event_get_user_data(e) != nullptr;
+  if (light && !theme_palette_has_light(theme_palette())) return;
   if (light == theme_is_light()) return;
   theme_set_light(light);
   board_restart();
@@ -98,11 +99,13 @@ void quickpanel_apply_saved_brightness() {
 
 // Botao do seletor Escuro/Claro: o do tema atual fica em destaque.
 static void themeButton(lv_obj_t *parent, int x, int w, const char *text, bool light) {
-  bool on = theme_is_light() == light;
+  bool disabled = light && !theme_palette_has_light(theme_palette());
+  bool on = !disabled && (theme_is_light() == light);
   lv_obj_t *l = ui_tonal_btn(parent, x, 0, w, text, themeCb, light ? (void *)1 : nullptr, 28);
   lv_obj_t *b = lv_obj_get_parent(l);
   lv_obj_set_style_bg_color(b, thc(on ? th::TONAL_PR : th::MINI), 0);
-  lv_obj_set_style_text_color(b, thc(on ? th::ON_TONAL : th::MUTED), 0);
+  lv_obj_set_style_text_color(b, thc(disabled ? th::OFF_TEXT : (on ? th::ON_TONAL : th::MUTED)), 0);
+  if (disabled) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
 }
 
 void quickpanel_init() {
@@ -159,7 +162,7 @@ void quickpanel_init() {
 
   lv_obj_t *list = ui_list(panel, 10, 108, 300);
   subWifi = ui_list_row(list, LV_SYMBOL_WIFI, "Wi-Fi", "", wifiCb, nullptr, 36).sub;
-  ui_list_row(list, LV_SYMBOL_SETTINGS, "Configuracoes", "Contas, relogio, sistema", settingsCb, nullptr, 36);
+  ui_list_row(list, LV_SYMBOL_SETTINGS, "Configuracoes", "Contas, tela e sistema", settingsCb, nullptr, 36);
 
   lv_obj_t *handle = lv_obj_create(panel);
   lv_obj_remove_style_all(handle);

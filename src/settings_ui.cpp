@@ -14,6 +14,7 @@
 #include "ui.h"
 #include "usage.h"
 #include "usage_ui.h"
+#include "wifi_ui.h"
 
 static constexpr int SCR_W = 320;
 static constexpr int SCR_H = 240;
@@ -61,10 +62,10 @@ static void openDialog(const char *title, const char *text, const char *ok, void
 }
 
 // ---- paginas -----------------------------------------------------------------
-// Escolhe o modo do uso de IA e quais paginas aparecem. Salva na hora; o tileview so e
+// Escolhe quais paginas aparecem na linha horizontal. Salva na hora; o tileview so e
 // montado no boot, entao vale ao reiniciar.
 
-static lv_obj_t *pagesScreen, *pagesList, *segJunta, *segSep;
+static lv_obj_t *pagesScreen, *pagesList;
 
 static void styleSeg(lv_obj_t *label, bool on) {
   lv_obj_t *b = lv_obj_get_parent(label);
@@ -74,18 +75,17 @@ static void styleSeg(lv_obj_t *label, bool on) {
 
 static void pageSwitchCb(lv_event_t *e) {
   PageId id = (PageId)(intptr_t)lv_event_get_user_data(e);
+  if (ui_ia_separate()) ui_set_ia_separate(false);
   ui_set_page_enabled(id, lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
 }
 
 static void rebuildPagesList() {
-  bool sep = ui_ia_separate();
-  styleSeg(segJunta, !sep);
-  styleSeg(segSep, sep);
+  if (ui_ia_separate()) ui_set_ia_separate(false);
   lv_obj_clean(pagesList);
   for (int i = 0; i < PG_COUNT; i++) {
     PageId id = (PageId)i;
     if (!ui_page_applies(id)) continue;
-    UiRow r = ui_list_row(pagesList, nullptr, ui_page_name(id), nullptr, nullptr, nullptr, 34);
+    UiRow r = ui_list_row(pagesList, nullptr, ui_page_name(id), nullptr, nullptr, nullptr, 31);
     lv_obj_t *sw = lv_switch_create(r.row);
     lv_obj_set_size(sw, 40, 22);
     lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -10, 0);
@@ -98,11 +98,6 @@ static void rebuildPagesList() {
   }
 }
 
-static void modeCb(lv_event_t *e) {
-  ui_set_ia_separate(lv_event_get_user_data(e) != nullptr);
-  rebuildPagesList();
-}
-
 static void restartNowCb(lv_event_t *) { board_restart(); }
 
 static void pagesBackCb(lv_event_t *) {
@@ -112,17 +107,14 @@ static void pagesBackCb(lv_event_t *) {
 }
 
 void pages_ui_open() {
-  if (pagesScreen || !ui_mem_ok(13 * 1024)) return;  // custo medido ~8,5 KB (x1,5)
+  if (pagesScreen || !ui_mem_ok(11 * 1024)) return;
   pagesScreen = ui_overlay();
   ui_back_header(pagesScreen, "Paginas", pagesBackCb);
 
-  segJunta = ui_tonal_btn(pagesScreen, 10, 46, 146, "IA junta", modeCb, nullptr, 30);
-  segSep = ui_tonal_btn(pagesScreen, 164, 46, 146, "IA separada", modeCb, (void *)1, 30);
-
   lv_obj_t *scroll = lv_obj_create(pagesScreen);
   lv_obj_remove_style_all(scroll);
-  lv_obj_set_size(scroll, 300, 122);
-  lv_obj_set_pos(scroll, 10, 84);
+  lv_obj_set_size(scroll, 300, 158);
+  lv_obj_set_pos(scroll, 10, 46);
   lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
   lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
   pagesList = ui_list(scroll, 0, 0, 300);
@@ -132,6 +124,77 @@ void pages_ui_open() {
   ui_tonal_btn(pagesScreen, 176, 210, 134, LV_SYMBOL_POWER " Reiniciar", restartNowCb, nullptr, 28);
 
   rebuildPagesList();
+}
+
+// ---- tema --------------------------------------------------------------------
+// 4 paletas fixas (Grafite, Claude Code, Terminal, Noite) + modo escuro/claro.
+
+static lv_obj_t *themeScreen;
+
+static void themeModeCb(lv_event_t *e) {
+  bool light = lv_event_get_user_data(e) != nullptr;
+  if (light && !theme_palette_has_light(theme_palette())) return;
+  if (light == theme_is_light()) return;
+  theme_set_light(light);
+  board_restart();
+}
+
+static void themePalCb(lv_event_t *e) {
+  PaletteId p = (PaletteId)(intptr_t)lv_event_get_user_data(e);
+  if (p == theme_palette()) return;
+  theme_set_palette(p);
+  board_restart();
+}
+
+static void themeBackCb(lv_event_t *) {
+  lv_obj_del_async(themeScreen);
+  themeScreen = nullptr;
+  settings_ui_child_closed();
+}
+
+static void theme_ui_open() {
+  if (themeScreen || !ui_mem_ok(9 * 1024)) return;
+  themeScreen = ui_overlay();
+  ui_back_header(themeScreen, "Tema", themeBackCb);
+
+  bool hasLight = theme_palette_has_light(theme_palette());
+  bool isLight = theme_is_light();
+
+  lv_obj_t *btnDark = ui_tonal_btn(themeScreen, 186, 8, 60, "Escuro", themeModeCb, nullptr, 28);
+  styleSeg(btnDark, !isLight);
+  lv_obj_t *btnLight = ui_tonal_btn(themeScreen, 252, 8, 58, "Claro", themeModeCb, (void *)1, 28);
+  styleSeg(btnLight, isLight && hasLight);
+  if (!hasLight) {
+    lv_obj_t *b = lv_obj_get_parent(btnLight);
+    lv_obj_set_style_text_color(b, thc(th::OFF_TEXT), 0);
+    lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  }
+
+  static const char *const PAL_SUBS[PAL_COUNT] = {
+      "Padrao - claro e escuro",
+      "Terracota - claro e escuro",
+      "Verde fosforo - so escuro",
+      "Contraste OLED - so escuro",
+  };
+  lv_obj_t *list = ui_list(themeScreen, 10, 48, 300);
+  for (int i = 0; i < PAL_COUNT; i++) {
+    PaletteId p = (PaletteId)i;
+    bool active = (p == theme_palette());
+    UiRow r = ui_list_row(list, " ", theme_palette_name(p), PAL_SUBS[i], themePalCb, (void *)(intptr_t)p, 44);
+    // Troca o icone por 3 circulos sobrepostos (bg, card, accent) da paleta.
+    lv_obj_t *oldDot = lv_obj_get_child(r.row, 0);
+    if (oldDot) lv_obj_add_flag(oldDot, LV_OBJ_FLAG_HIDDEN);
+    ThemeSwatch swc = theme_swatch(p, isLight);
+    uint32_t cols[3] = {swc.bg, swc.card, swc.accent};
+    for (int k = 0; k < 3; k++) {
+      lv_obj_t *sw = ui_dot(r.row, 13, cols[k]);
+      lv_obj_set_style_border_width(sw, 1, 0);
+      lv_obj_set_style_border_color(sw, thc(th::LINE), 0);
+      lv_obj_align(sw, LV_ALIGN_LEFT_MID, 8 + k * 9, 0);
+    }
+    lv_label_set_text(r.trail, active ? LV_SYMBOL_OK : "");
+    if (active) lv_obj_set_style_text_color(r.trail, thc(th::ACCENT), 0);
+  }
 }
 
 // ---- fluidez e transicao -----------------------------------------------------
@@ -200,8 +263,8 @@ static void fluid_ui_open() {
 
 enum Row : int {
   R_CLAUDE, R_CODEX, R_AGY, R_SPOTIFY, R_PC,
-  R_CLOCK, R_PAGES, R_THEME, R_FLUID,
-  R_DIAG, R_TOUCH, R_RESTART, R_RESET,
+  R_CLOCK, R_IA_ORDER, R_PAGES, R_THEME, R_FLUID,
+  R_WIFI, R_DIAG, R_TOUCH, R_RESTART, R_RESET,
   R_CAT_ACCOUNTS, R_CAT_SCREEN, R_CAT_SYSTEM,
   R_COUNT
 };
@@ -247,28 +310,30 @@ static void refreshSubs(lv_timer_t *) {
 
   snprintf(buf, sizeof(buf), "%d de 5 conectadas", connected);
   setSub(R_CAT_ACCOUNTS, buf, connected == 5 ? th::GREEN : th::MUTED);
-  setSub(R_CAT_SCREEN, "Relogio, paginas, tema e fluidez", th::MUTED);
-  setSub(R_CAT_SYSTEM, "Diagnostico, toque e reiniciar", th::MUTED);
+  setSub(R_CAT_SCREEN, "Relogio, IAs, paginas e tema", th::MUTED);
+  setSub(R_CAT_SYSTEM, "Wi-Fi, diagnostico, toque e reiniciar", th::MUTED);
 
   clock_ui_summary(buf, sizeof(buf));
   setSub(R_CLOCK, buf, th::MUTED);
+  usage_ui_order_summary(buf, sizeof(buf));
+  setSub(R_IA_ORDER, buf, th::MUTED);
   int n = 0;
   for (int i = 0; i < PG_COUNT; i++)
     if (ui_page_applies((PageId)i) && ui_page_enabled((PageId)i)) n++;
-  snprintf(buf, sizeof(buf), "%d visiveis - IA %s", n, ui_ia_separate() ? "separada" : "junta");
+  snprintf(buf, sizeof(buf), "%d de 5 visiveis", n);
   setSub(R_PAGES, buf, th::MUTED);
-  setSub(R_THEME, theme_is_light() ? "Claro" : "Escuro", th::MUTED);
+  theme_summary(buf, sizeof(buf));
+  setSub(R_THEME, buf, th::MUTED);
   static const char *const TRANS_NAMES[3] = {"Deslizar", "Esmaecer", "Sem animacao"};
   snprintf(buf, sizeof(buf), "%d linhas - %s", ui_buf_lines(), TRANS_NAMES[ui_transition()]);
   setSub(R_FLUID, buf, th::MUTED);
-  board_heap_t h = board_heap();
-  snprintf(buf, sizeof(buf), "Heap %u KB", (unsigned)(h.free_bytes / 1024));
-  setSub(R_DIAG, buf, th::MUTED);
-}
 
-static void themeToggle() {
-  theme_set_light(!theme_is_light());
-  board_restart();  // as telas pegam as cores na montagem
+  wifi_ui_summary(buf, sizeof(buf));
+  setSub(R_WIFI, buf, th::MUTED);
+  board_heap_t h = board_heap();
+  snprintf(buf, sizeof(buf), "Heap %u KB - Testar servicos", (unsigned)(h.free_bytes / 1024));
+  setSub(R_DIAG, buf, th::MUTED);
+  setSub(R_TOUCH, "Toque nos 4 cantos da tela", th::MUTED);
 }
 
 static void openCategory(Row cat);
@@ -306,8 +371,11 @@ static void openLeaf(Row r) {
     case R_SPOTIFY: spotify_ui_open_account(); break;
     case R_PC: pc_ui_open_agent(); break;
     case R_CLOCK: clock_ui_open_settings(); break;
+    case R_IA_ORDER: usage_ui_open_order(); break;
     case R_PAGES: pages_ui_open(); break;
+    case R_THEME: theme_ui_open(); break;
     case R_FLUID: fluid_ui_open(); break;
+    case R_WIFI: wifi_ui_open(); break;
     case R_DIAG: diag_ui_open(); break;
     default: break;
   }
@@ -354,10 +422,12 @@ static void rowCb(lv_event_t *e) {
     case R_SPOTIFY:
     case R_PC:
     case R_CLOCK:
+    case R_IA_ORDER:
     case R_PAGES:
+    case R_THEME:
     case R_FLUID:
+    case R_WIFI:
     case R_DIAG: lv_async_call(toLeafAsync, lv_event_get_user_data(e)); break;
-    case R_THEME: themeToggle(); break;
     case R_TOUCH: board_request_touch_recalibration(); break;
     case R_RESTART:
       openDialog("Reiniciar o painel?", "A tela apaga por alguns segundos. Contas e Wi-Fi continuam salvos.", "Reiniciar",
@@ -388,11 +458,20 @@ static void catBackAsync(void *) {
 static void catBackCb(lv_event_t *) { lv_async_call(catBackAsync, nullptr); }
 
 // Linha da lista; `plain` = sem subtitulo (acoes), com o titulo centralizado.
-static void addRow(lv_obj_t *list, Row id, const char *icon, const char *title, bool danger = false, bool plain = false,
-                   int h = 0) {
-  UiRow r = ui_list_row(list, icon, title, plain ? nullptr : "", rowCb, (void *)(intptr_t)id, h ? h : (plain ? 44 : 46));
+static UiRow addRow(lv_obj_t *list, Row id, const char *icon, const char *title, bool danger = false, bool plain = false,
+                    int h = 0) {
+  UiRow r = ui_list_row(list, icon, title, plain ? nullptr : "", rowCb, (void *)(intptr_t)id, h ? h : (plain ? 40 : 44));
   subs[id] = r.sub;
   if (danger) lv_obj_set_style_text_color(r.title, thc(th::ON_DANGER), 0);
+  return r;
+}
+
+static void colorRowBadge(UiRow r, uint32_t bg, uint32_t fg) {
+  lv_obj_t *dot = lv_obj_get_child(r.row, 0);
+  if (!dot) return;
+  lv_obj_set_style_bg_color(dot, thc(bg), 0);
+  lv_obj_t *ic = lv_obj_get_child(dot, 0);
+  if (ic) lv_obj_set_style_text_color(ic, thc(fg), 0);
 }
 
 static void openCategory(Row cat) {
@@ -412,21 +491,23 @@ static void openCategory(Row cat) {
   lv_obj_t *list = ui_list(scroll, 0, 0, 300);
 
   if (cat == R_CAT_ACCOUNTS) {
-    addRow(list, R_CLAUDE, LV_SYMBOL_DIRECTORY, "Claude");
-    addRow(list, R_CODEX, LV_SYMBOL_DIRECTORY, "Codex");
-    addRow(list, R_AGY, LV_SYMBOL_DIRECTORY, "Antigravity");
-    addRow(list, R_SPOTIFY, LV_SYMBOL_AUDIO, "Spotify");
-    addRow(list, R_PC, LV_SYMBOL_USB, "Agente do PC");
+    colorRowBadge(addRow(list, R_CLAUDE, "C", "Claude", false, false, 36), 0x3b241d, 0xd97757);
+    colorRowBadge(addRow(list, R_CODEX, "X", "Codex", false, false, 36), 0x12312a, 0x10a37f);
+    colorRowBadge(addRow(list, R_AGY, "A", "Antigravity", false, false, 36), 0x261f3d, 0x8b5cf6);
+    colorRowBadge(addRow(list, R_SPOTIFY, LV_SYMBOL_AUDIO, "Spotify", false, false, 36), th::OK_BG, th::SP_GREEN);
+    addRow(list, R_PC, LV_SYMBOL_USB, "Agente do PC", false, false, 36);
   } else if (cat == R_CAT_SCREEN) {
-    addRow(list, R_CLOCK, LV_SYMBOL_BELL, "Relogio");
-    addRow(list, R_PAGES, LV_SYMBOL_LIST, "Paginas");
-    addRow(list, R_THEME, LV_SYMBOL_IMAGE, "Tema");
-    addRow(list, R_FLUID, LV_SYMBOL_REFRESH, "Fluidez e transicao");
+    addRow(list, R_CLOCK, LV_SYMBOL_BELL, "Relogio", false, false, 36);
+    addRow(list, R_IA_ORDER, LV_SYMBOL_UP, "Ordem das IAs", false, false, 36);
+    addRow(list, R_PAGES, LV_SYMBOL_LIST, "Paginas", false, false, 36);
+    addRow(list, R_THEME, LV_SYMBOL_IMAGE, "Tema", false, false, 36);
+    addRow(list, R_FLUID, LV_SYMBOL_REFRESH, "Fluidez e transicao", false, false, 36);
   } else {
-    addRow(list, R_DIAG, LV_SYMBOL_LOOP, "Diagnostico de rede");
-    addRow(list, R_TOUCH, LV_SYMBOL_GPS, "Recalibrar toque", false, true);
-    addRow(list, R_RESTART, LV_SYMBOL_POWER, "Reiniciar o painel", true, true);
-    addRow(list, R_RESET, LV_SYMBOL_TRASH, "Redefinir tudo", true, true);
+    addRow(list, R_WIFI, LV_SYMBOL_WIFI, "Wi-Fi", false, false, 36);
+    addRow(list, R_DIAG, LV_SYMBOL_LOOP, "Diagnostico de rede", false, false, 36);
+    addRow(list, R_TOUCH, LV_SYMBOL_GPS, "Recalibrar toque", false, false, 36);
+    addRow(list, R_RESTART, LV_SYMBOL_POWER, "Reiniciar o painel", true, true, 34);
+    addRow(list, R_RESET, LV_SYMBOL_TRASH, "Redefinir tudo", true, true, 34);
   }
   timer = lv_timer_create(refreshSubs, 1000, nullptr);
   refreshSubs(nullptr);

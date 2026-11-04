@@ -74,7 +74,7 @@ void ui_set_page_enabled(PageId id, bool on) {
 static void updateDots() {
   for (int i = 0; i < pageCount; i++) {
     bool on = i == curPage;
-    lv_obj_set_size(dots[i], on ? 16 : 6, 6);
+    lv_obj_set_size(dots[i], on ? 16 : 5, 5);
     lv_obj_set_style_bg_color(dots[i], thc(on ? th::DOT_ON : th::DOT), 0);
   }
 }
@@ -149,21 +149,36 @@ static void goToPage(int idx) {
 
 // A pagina so troca por gesto: basta um arrasto curto (indev gesture_limit) e o
 // resto do movimento e animado, entao o dedo aliviar no fim nao atrapalha.
-// Gesto para baixo em qualquer ponto abre o painel de ajustes.
+// Na pagina de IA, o gesto vertical troca entre Claude, Codex e Antigravity; puxar da
+// borda de cima (ou no topo da coluna) abre os Ajustes rapidos.
 static void gestureCb(lv_event_t *) {
   lv_indev_t *indev = lv_indev_get_act();
   lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+  int startY = indev->proc.types.pointer.act_point.y - indev->proc.types.pointer.gesture_sum.y;
   if (dir == LV_DIR_LEFT) goToPage(curPage + 1);
   else if (dir == LV_DIR_RIGHT) goToPage(curPage - 1);
-  else if (dir == LV_DIR_BOTTOM) quickpanel_open();
-  else return;
+  else if (dir == LV_DIR_TOP && ui_page_shown(PG_USAGE)) {
+    if (!usage_ui_step(1)) return;
+  } else if (dir == LV_DIR_BOTTOM) {
+    if (ui_page_shown(PG_USAGE) && startY > 40) {
+      if (!usage_ui_step(-1)) quickpanel_open();
+    } else {
+      quickpanel_open();
+    }
+  } else return;
   lv_indev_wait_release(indev);  // o gesto nao vira clique no botao em que comecou
 }
 
 bool ui_is_animating() { return animating; }
 
 bool ui_goto(PageId id) {
-  if (id == PG_USAGE && ui_ia_separate()) id = PG_CLAUDE;
+  if (!ui_ia_separate() && (id == PG_CLAUDE || id == PG_CODEX || id == PG_AGY)) {
+    Provider p = id == PG_CLAUDE ? PROV_CLAUDE : id == PG_CODEX ? PROV_CODEX : PROV_ANTIGRAVITY;
+    usage_ui_select_provider(p);
+    id = PG_USAGE;
+  } else if (id == PG_USAGE && ui_ia_separate()) {
+    id = PG_CLAUDE;
+  }
   for (int i = 0; i < pageCount; i++) {
     if (pages[i] != id) continue;
     goToPage(i);
@@ -228,12 +243,23 @@ void ui_init() {
   lv_obj_set_tile_id(tileview, 0, 0, LV_ANIM_OFF);
   board_log("[ui] %d paginas, IA %s", pageCount, ui_ia_separate() ? "separada" : "junta");
 
+  // Alca discreta no topo indicando o gesto de puxar os Ajustes rapidos.
+  lv_obj_t *topHit = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(topHit);
+  lv_obj_set_size(topHit, 80, 14);
+  lv_obj_align(topHit, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_add_flag(topHit, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(topHit, [](lv_event_t *) { quickpanel_open(); }, LV_EVENT_CLICKED, nullptr);
+  lv_obj_t *topPill = ui_dot(topHit, 0, th::HANDLE);
+  lv_obj_set_size(topPill, 28, 3);
+  lv_obj_align(topPill, LV_ALIGN_TOP_MID, 0, 4);
+
   // Indicador de pagina na camada de cima, sem capturar toque.
   lv_obj_t *row = lv_obj_create(lv_layer_top());
   lv_obj_remove_style_all(row);
   lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(row, 200, 18);
-  lv_obj_align(row, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_set_size(row, 200, 14);
+  lv_obj_align(row, LV_ALIGN_BOTTOM_MID, 0, -2);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(row, 5, 0);

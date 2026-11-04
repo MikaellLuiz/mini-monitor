@@ -31,10 +31,10 @@ static void setIfChanged(lv_obj_t *l, const char *text) {
 // ---- pagina PC ---------------------------------------------------------------
 
 struct Metric {
-  lv_obj_t *value, *sub, *bar;
+  lv_obj_t *value, *sub, *arc;
   uint32_t color;
 };
-static Metric metrics[4];  // CPU, RAM, GPU, Temperatura
+static Metric metrics[4];  // CPU, RAM, GPU, Temp.
 static lv_obj_t *lblBadge, *badgeDot;
 static lv_timer_t *pcTimer, *scTimer;
 static uint32_t refreshingUntil;  // "atualizando" apos um toque
@@ -53,43 +53,65 @@ static void metricTapCb(lv_event_t *) {
 static void makeMetric(lv_obj_t *parent, int idx, int x, int y, const char *name, uint32_t color) {
   Metric &m = metrics[idx];
   m.color = color;
-  lv_obj_t *box = ui_card(parent, x, y, 148, 84);
+  lv_obj_t *box = ui_card(parent, x, y, 148, 82);
   lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_style_bg_color(box, thc(th::ROW_PR), LV_STATE_PRESSED);
   lv_obj_add_event_cb(box, metricTapCb, LV_EVENT_CLICKED, nullptr);
 
-  lv_obj_t *n = ui_muted(box, name);
-  lv_obj_set_pos(n, 12, 9);
+  m.arc = lv_arc_create(box);
+  lv_obj_set_size(m.arc, 52, 52);
+  lv_obj_set_pos(m.arc, 10, 15);
+  lv_arc_set_rotation(m.arc, 270);
+  lv_arc_set_bg_angles(m.arc, 0, 360);
+  lv_arc_set_range(m.arc, 0, 100);
+  lv_arc_set_value(m.arc, 0);
+  lv_obj_remove_style(m.arc, nullptr, LV_PART_KNOB);
+  lv_obj_clear_flag(m.arc, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_arc_width(m.arc, 6, 0);
+  lv_obj_set_style_arc_color(m.arc, thc(th::TRACK), 0);
+  lv_obj_set_style_arc_width(m.arc, 6, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(m.arc, thc(color), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_rounded(m.arc, true, LV_PART_INDICATOR);
 
-  m.value = lv_label_create(box);
+  m.value = lv_label_create(m.arc);
   lv_label_set_text(m.value, "--");
-  lv_obj_set_style_text_font(m.value, &lv_font_montserrat_28, 0);
-  lv_obj_set_pos(m.value, 12, 28);
+  lv_obj_set_style_text_font(m.value, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(m.value, thc(th::TEXT), 0);
+  lv_obj_center(m.value);
+
+  lv_obj_t *n = lv_label_create(box);
+  lv_label_set_text(n, name);
+  lv_obj_set_style_text_font(n, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(n, thc(th::TEXT), 0);
+  lv_obj_set_pos(n, 72, 22);
 
   m.sub = ui_muted(box, "");
-  lv_obj_align(m.sub, LV_ALIGN_TOP_RIGHT, -12, 42);
-
-  m.bar = ui_bar(box, 124, 5, color);
-  lv_obj_set_pos(m.bar, 12, 68);
+  lv_label_set_long_mode(m.sub, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(m.sub, 68);
+  lv_obj_set_pos(m.sub, 72, 42);
 }
 
 static void setMetric(Metric &m, float pct, const char *unit, int shownValue, const char *sub) {
   setIfChanged(m.sub, sub);
   if (pct < 0) {
     setIfChanged(m.value, "--");
-    lv_bar_set_value(m.bar, 0, LV_ANIM_OFF);
+    lv_arc_set_value(m.arc, 0);
     return;
   }
   char buf[12];
   snprintf(buf, sizeof(buf), "%d%s", shownValue, unit);
   setIfChanged(m.value, buf);
-  lv_bar_set_value(m.bar, (int)pct, LV_ANIM_OFF);
-  lv_obj_set_style_bg_color(m.bar, thc(pct >= 90 ? th::RED : pct >= 75 ? th::AMBER : m.color), LV_PART_INDICATOR);
+  int v = (int)(pct + 0.5f);
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  lv_arc_set_value(m.arc, v);
+  uint32_t col = pct >= 90 ? th::RED : pct >= 75 ? th::AMBER : m.color;
+  lv_obj_set_style_arc_color(m.arc, thc(col), LV_PART_INDICATOR);
 }
 
 static void paintPc() {
   PcMetrics m = pc_get();
-  char badge[40];
+  char badge[32];
   uint32_t color = th::MUTED;
   if (!m.paired) snprintf(badge, sizeof(badge), "Sem agente - toque");
   else if ((int32_t)(board_millis() - refreshingUntil) < 0) {
@@ -97,23 +119,29 @@ static void paintPc() {
     color = th::MUTED;
   }
   else if (!m.online) {
-    snprintf(badge, sizeof(badge), "%s: %s", m.name, m.error[0] ? m.error : "conectando...");
+    snprintf(badge, sizeof(badge), "%.14s: %.14s", m.name, m.error[0] ? m.error : "conectando");
     color = m.error[0] ? th::RED : th::MUTED;
   } else {
-    snprintf(badge, sizeof(badge), "%s - %s", m.name, m.source == PC_SRC_USB ? "USB" : "Wi-Fi");
+    snprintf(badge, sizeof(badge), "%.18s - %s", m.name, m.source == PC_SRC_USB ? "USB" : "Wi-Fi");
     color = th::GREEN;
   }
   setIfChanged(lblBadge, badge);
+  lv_obj_align(lblBadge, LV_ALIGN_TOP_RIGHT, -12, 14);
   lv_obj_set_style_bg_color(badgeDot, thc(color), 0);
+  lv_obj_align_to(badgeDot, lblBadge, LV_ALIGN_OUT_LEFT_MID, -6, 0);
 
   bool ok = m.paired && m.online;
   char vram[16] = "";
   if (ok && m.vram >= 0) snprintf(vram, sizeof(vram), "VRAM %d%%", (int)(m.vram + 0.5f));
-  setMetric(metrics[0], ok ? m.cpu : -1, "%", (int)(m.cpu + 0.5f), "");
-  setMetric(metrics[1], ok ? m.ram : -1, "%", (int)(m.ram + 0.5f), "");
-  setMetric(metrics[2], ok ? m.gpu : -1, "%", (int)(m.gpu + 0.5f), vram);
-  // Temperatura: barra em escala de 0 a 100 C.
-  setMetric(metrics[3], ok && m.temp >= 0 ? (float)m.temp : -1, "C", m.temp, ok && m.temp >= 0 ? "GPU" : "");
+  else if (ok) snprintf(vram, sizeof(vram), "em uso");
+  const char *cpuSub = !ok ? "--" : (m.cpu >= 80 ? "alta" : "normal");
+  const char *ramSub = !ok ? "--" : "em uso";
+  const char *tempSub = (ok && m.temp >= 0) ? "GPU" : "--";
+  setMetric(metrics[0], ok ? m.cpu : -1, "%", (int)(m.cpu + 0.5f), cpuSub);
+  setMetric(metrics[1], ok ? m.ram : -1, "%", (int)(m.ram + 0.5f), ramSub);
+  setMetric(metrics[2], ok ? m.gpu : -1, "%", (int)(m.gpu + 0.5f), ok ? vram : "--");
+  // Temp.: anel em escala de 0 a 100 C; rotulo curto "Temp." para nunca extrapolar os 68px.
+  setMetric(metrics[3], ok && m.temp >= 0 ? (float)m.temp : -1, "C", m.temp, tempSub);
 }
 
 static void pcRefreshCb(lv_timer_t *) {
@@ -294,16 +322,14 @@ void pc_ui_build_page(lv_obj_t *tile) {
   ui_title(tile, "PC");
   lblBadge = ui_muted(tile, "");
   lv_obj_set_style_text_color(lblBadge, thc(th::ON_MINI), 0);
-  lv_label_set_long_mode(lblBadge, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(lblBadge, 140, 16);
-  lv_obj_set_pos(lblBadge, 132, 15);
+  lv_obj_align(lblBadge, LV_ALIGN_TOP_RIGHT, -12, 14);
   badgeDot = ui_dot(tile, 7, th::MUTED);
-  lv_obj_set_pos(badgeDot, 120, 19);
+  lv_obj_align_to(badgeDot, lblBadge, LV_ALIGN_OUT_LEFT_MID, -6, 0);
 
-  makeMetric(tile, 0, 8, 44, "CPU", th::ACCENT);
-  makeMetric(tile, 1, 164, 44, "RAM", th::ACCENT);
-  makeMetric(tile, 2, 8, 134, "GPU", th::ACCENT);
-  makeMetric(tile, 3, 164, 134, "Temperatura", th::AMBER);
+  makeMetric(tile, 0, 10, 40, "CPU", th::ACCENT);
+  makeMetric(tile, 1, 162, 40, "RAM", th::ACCENT);
+  makeMetric(tile, 2, 10, 130, "GPU", th::ACCENT);
+  makeMetric(tile, 3, 162, 130, "Temp.", th::AMBER);
 
   pcTimer = lv_timer_create(pcRefreshCb, 1000, nullptr);
   ensureVisibilityTimer();
@@ -322,16 +348,36 @@ void pc_ui_unbuild_page() {
 
 // ---- pagina Atalhos ----------------------------------------------------------
 
-static lv_obj_t *scBtn[PC_MAX_SHORTCUTS], *scLbl[PC_MAX_SHORTCUTS], *scHint, *scSent, *scSentLbl, *scSetup;
+static lv_obj_t *scBtn[PC_MAX_SHORTCUTS], *scLbl[PC_MAX_SHORTCUTS], *scIcon[PC_MAX_SHORTCUTS];
+static lv_obj_t *scSub, *scSent, *scSentLbl, *scEmpty, *scEmptyTitle, *scEmptySub, *scSetup;
 static int shownCount = -1;
 static char shownLabels[PC_MAX_SHORTCUTS][13];
 static uint32_t sentAt;
+
+static const char *iconForShortcut(const char *label) {
+  if (!label || !label[0]) return LV_SYMBOL_CHARGE;
+  char low[16];
+  size_t i = 0;
+  for (; label[i] && i < sizeof(low) - 1; i++) {
+    char c = label[i];
+    low[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+  }
+  low[i] = 0;
+  if (strstr(low, "mud") || strstr(low, "mut") || strstr(low, "mic")) return LV_SYMBOL_MUTE;
+  if (strstr(low, "som") || strstr(low, "vol") || strstr(low, "aud") || strstr(low, "fon")) return LV_SYMBOL_VOLUME_MAX;
+  if (strstr(low, "tel") || strstr(low, "prin") || strstr(low, "cap") || strstr(low, "fot")) return LV_SYMBOL_IMAGE;
+  if (strstr(low, "bloq") || strstr(low, "loc") || strstr(low, "sair")) return LV_SYMBOL_EYE_CLOSE;
+  if (strstr(low, "pla") || strstr(low, "pau") || strstr(low, "mus")) return LV_SYMBOL_PLAY;
+  if (strstr(low, "ter") || strstr(low, "cmd") || strstr(low, "cod")) return LV_SYMBOL_KEYBOARD;
+  return LV_SYMBOL_CHARGE;
+}
 
 static void shortcutCb(lv_event_t *e) {
   int i = (int)(intptr_t)lv_event_get_user_data(e);
   pc_shortcut_press(i);
   lv_label_set_text_fmt(scSentLbl, LV_SYMBOL_OK " %s enviado", shownLabels[i]);
   lv_obj_clear_flag(scSent, LV_OBJ_FLAG_HIDDEN);
+  if (scSub) lv_obj_add_flag(scSub, LV_OBJ_FLAG_HIDDEN);
   sentAt = board_millis();
 }
 
@@ -346,20 +392,40 @@ static void paintShortcuts() {
       if (strcmp(shownLabels[i], label)) {
         snprintf(shownLabels[i], sizeof(shownLabels[i]), "%s", label);
         lv_label_set_text(scLbl[i], label);
+        lv_label_set_text(scIcon[i], iconForShortcut(label));
       }
     } else {
       lv_obj_add_flag(scBtn[i], LV_OBJ_FLAG_HIDDEN);
       shownLabels[i][0] = 0;
     }
   }
+  if (scSub) {
+    if (n > 0 && !sentAt) {
+      lv_label_set_text_fmt(scSub, "%d do PC", n);
+      lv_obj_align(scSub, LV_ALIGN_TOP_RIGHT, -12, 14);
+      lv_obj_clear_flag(scSub, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(scSub, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   int state = n > 0 ? 1 : (m.paired ? 2 : 3);
   if (state != shownCount) {
     shownCount = state;
-    if (state == 3) lv_obj_clear_flag(scSetup, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(scSetup, LV_OBJ_FLAG_HIDDEN);
-    if (state == 1) lv_label_set_text(scHint, "");
-    else if (state == 2) lv_label_set_text(scHint, m.error[0] ? "O PC nao respondeu.\nConfira se o agente esta rodando." : "Carregando os atalhos do PC...");
-    else lv_label_set_text(scHint, "Sem agente do PC.\n\nOs atalhos vem do agente.\nToque abaixo para configurar.");
+    if (state == 1) {
+      lv_obj_add_flag(scEmpty, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_clear_flag(scEmpty, LV_OBJ_FLAG_HIDDEN);
+      if (state == 2) {
+        lv_label_set_text(scEmptyTitle, m.error[0] ? "PC sem resposta" : "Conectando ao PC...");
+        lv_label_set_text(scEmptySub,
+                          m.error[0] ? "Confira se o agente esta rodando no PC." : "Carregando os atalhos configurados.");
+        lv_obj_add_flag(scSetup, LV_OBJ_FLAG_HIDDEN);
+      } else {
+        lv_label_set_text(scEmptyTitle, "Nenhum PC ligado");
+        lv_label_set_text(scEmptySub, "Pareie o agente no PC para usar atalhos.");
+        lv_obj_clear_flag(scSetup, LV_OBJ_FLAG_HIDDEN);
+      }
+    }
   }
 }
 
@@ -375,8 +441,12 @@ static void scRefreshCb(lv_timer_t *) {
 void shortcuts_ui_build_page(lv_obj_t *tile) {
   ui_title(tile, "Atalhos");
 
+  scSub = ui_muted(tile, "");
+  lv_obj_align(scSub, LV_ALIGN_TOP_RIGHT, -12, 14);
+  lv_obj_add_flag(scSub, LV_OBJ_FLAG_HIDDEN);
+
   // Confirmacao do ultimo atalho, some sozinha.
-  scSent = ui_card(tile, 150, 8, 160, 24, th::SENT_BG);
+  scSent = ui_card(tile, 150, 8, 160, 24, th::OK_BG);
   lv_obj_set_style_radius(scSent, LV_RADIUS_CIRCLE, 0);
   scSentLbl = lv_label_create(scSent);
   lv_label_set_long_mode(scSentLbl, LV_LABEL_LONG_DOT);
@@ -389,28 +459,55 @@ void shortcuts_ui_build_page(lv_obj_t *tile) {
 
   for (int i = 0; i < PC_MAX_SHORTCUTS; i++) {
     int col = i % 3, row = i / 3;
-    scBtn[i] = ui_card(tile, 8 + col * 104, 40 + row * 88, 96, 80);
+    scBtn[i] = ui_card(tile, 10 + col * 102, 42 + row * 88, 96, 80);
     lv_obj_add_flag(scBtn[i], LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_color(scBtn[i], thc(th::CARD_HI), LV_STATE_PRESSED);
     lv_obj_add_flag(scBtn[i], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *ic = ui_dot(scBtn[i], 30, th::TONAL);
-    lv_obj_align(ic, LV_ALIGN_TOP_MID, 0, 12);
-    lv_obj_t *il = lv_label_create(ic);
-    lv_label_set_text(il, LV_SYMBOL_CHARGE);
-    lv_obj_set_style_text_color(il, thc(th::ON_TONAL), 0);
-    lv_obj_center(il);
+    lv_obj_t *ic = ui_dot(scBtn[i], 36, th::TONAL);
+    lv_obj_align(ic, LV_ALIGN_TOP_MID, 0, 10);
+    scIcon[i] = lv_label_create(ic);
+    lv_label_set_text(scIcon[i], LV_SYMBOL_CHARGE);
+    lv_obj_set_style_text_color(scIcon[i], thc(th::ON_TONAL), 0);
+    lv_obj_center(scIcon[i]);
     scLbl[i] = lv_label_create(scBtn[i]);
     lv_label_set_long_mode(scLbl[i], LV_LABEL_LONG_DOT);
     lv_obj_set_width(scLbl[i], 88);
     lv_obj_set_style_text_align(scLbl[i], LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(scLbl[i], &lv_font_montserrat_14, 0);
     lv_label_set_text(scLbl[i], "");
     lv_obj_align(scLbl[i], LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_add_event_cb(scBtn[i], shortcutCb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
   }
-  scHint = ui_muted(tile, "", &lv_font_montserrat_14);
-  lv_obj_set_pos(scHint, 12, 60);
-  scSetup = lv_obj_get_parent(ui_tonal_btn(tile, 12, 150, 0, LV_SYMBOL_SETTINGS " Configurar agente", [](lv_event_t *) { openPair(nullptr); }));
-  lv_obj_add_flag(scSetup, LV_OBJ_FLAG_HIDDEN);
+
+  scEmpty = lv_obj_create(tile);
+  lv_obj_remove_style_all(scEmpty);
+  lv_obj_set_size(scEmpty, 300, 170);
+  lv_obj_set_pos(scEmpty, 10, 44);
+  lv_obj_clear_flag(scEmpty, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_t *usbBadge = ui_dot(scEmpty, 44, th::TONAL);
+  lv_obj_align(usbBadge, LV_ALIGN_TOP_MID, 0, 4);
+  lv_obj_t *usbIc = lv_label_create(usbBadge);
+  lv_label_set_text(usbIc, LV_SYMBOL_USB);
+  lv_obj_set_style_text_font(usbIc, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(usbIc, thc(th::ON_TONAL), 0);
+  lv_obj_center(usbIc);
+
+  scEmptyTitle = lv_label_create(scEmpty);
+  lv_label_set_text(scEmptyTitle, "Nenhum PC ligado");
+  lv_obj_set_style_text_font(scEmptyTitle, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(scEmptyTitle, thc(th::TEXT), 0);
+  lv_obj_align(scEmptyTitle, LV_ALIGN_TOP_MID, 0, 56);
+
+  scEmptySub = ui_muted(scEmpty, "Pareie o agente no PC para usar atalhos.");
+  lv_obj_set_width(scEmptySub, 240);
+  lv_label_set_long_mode(scEmptySub, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(scEmptySub, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(scEmptySub, LV_ALIGN_TOP_MID, 0, 80);
+
+  scSetup = lv_obj_get_parent(
+      ui_tonal_btn(scEmpty, 75, 120, 150, LV_SYMBOL_PLUS " Parear um PC", [](lv_event_t *) { openPair(nullptr); }));
+  lv_obj_add_flag(scEmpty, LV_OBJ_FLAG_HIDDEN);
+
   scTimer = lv_timer_create(scRefreshCb, 500, nullptr);
   ensureVisibilityTimer();
   paintShortcuts();  // a pagina pode ser montada antes de aparecer: ja nasce com os atalhos
@@ -421,7 +518,8 @@ void shortcuts_ui_unbuild_page() {
   scTimer = nullptr;
   memset(scBtn, 0, sizeof(scBtn));
   memset(scLbl, 0, sizeof(scLbl));
-  scHint = scSent = scSentLbl = scSetup = nullptr;
+  memset(scIcon, 0, sizeof(scIcon));
+  scSub = scSent = scSentLbl = scEmpty = scEmptyTitle = scEmptySub = scSetup = nullptr;
   shownCount = -1;
   memset(shownLabels, 0, sizeof(shownLabels));
   sentAt = 0;

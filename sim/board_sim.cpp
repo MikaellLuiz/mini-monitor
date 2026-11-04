@@ -1,7 +1,12 @@
 // board.h no PC: tempo do Windows (ou virtual), log no console e configuracoes
 // num arquivo texto ao lado do executavel.
 
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <stdlib.h>
+#include <sys/time.h>
+#endif
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,10 +25,20 @@ uint8_t g_sim_brightness = 200;
 
 static const char *SETTINGS_FILE = "sim_settings.txt";
 
+static uint64_t hostMillis() {
+#ifdef _WIN32
+  return GetTickCount64();
+#else
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
+#endif
+}
+
 uint32_t board_millis(void) {
   if (g_sim_virtual_time) return (uint32_t)g_sim_vtime_ms;
-  static uint64_t start = GetTickCount64();
-  return (uint32_t)(GetTickCount64() - start);
+  static uint64_t start = hostMillis();
+  return (uint32_t)(hostMillis() - start);
 }
 
 void board_log(const char *fmt, ...) {
@@ -55,10 +70,17 @@ bool board_local_time(int *hour, int *minute) {
     *minute = 32;
     return true;
   }
+#ifdef _WIN32
   SYSTEMTIME t;
   GetLocalTime(&t);
   *hour = t.wHour;
   *minute = t.wMinute;
+#else
+  time_t n = time(nullptr);
+  struct tm t = *localtime(&n);
+  *hour = t.tm_hour;
+  *minute = t.tm_min;
+#endif
   return true;
 }
 
